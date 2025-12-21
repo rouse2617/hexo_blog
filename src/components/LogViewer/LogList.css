@@ -1,0 +1,71 @@
+.log-list {
+  position: relative;
+  height: 100%;
+  overflow-y: auto;
+  background-color: #ffffff;
+}
+
+.log-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.log-list-content {
+  min-height: 100%;
+}
+
+.log-list-scroll-hint {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 8px;
+  background-color: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.log-list-scroll-button {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.log-list-scroll-button:hover {
+  background-color: #2563eb;
+}
+
+.log-list-scroll-button:active {
+  background-color: #1d4ed8;
+}
+
+/* Virtual scroll mode indicator (for future implementation) */
+.log-list-virtual {
+  /* Placeholder for virtual scroll styles */
+}
+
+/* Scrollbar styling */
+.log-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.log-list::-webkit-scrollbar-track {
+  background-color: #f3f4f6;
+}
+
+.log-list::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 4px;
+}
+
+.log-list::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}

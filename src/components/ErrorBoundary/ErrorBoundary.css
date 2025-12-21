@@ -1,0 +1,81 @@
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  background-color: #f8f9fa;
+}
+
+.error-boundary-content {
+  max-width: 500px;
+  padding: 40px;
+  text-align: center;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.error-boundary-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.error-boundary-title {
+  margin: 0 0 16px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+}
+
+.error-boundary-message {
+  margin: 0 0 24px;
+  font-size: 16px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.error-boundary-details {
+  margin-bottom: 24px;
+  text-align: left;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.error-boundary-details summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #666;
+}
+
+.error-boundary-details pre {
+  margin: 12px 0 0;
+  padding: 12px;
+  background: #fff;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 11px;
+  color: #d32f2f;
+}
+
+.error-boundary-retry {
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  background-color: #1976d2;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.error-boundary-retry:hover {
+  background-color: #1565c0;
+}
+
+.error-boundary-retry:active {
+  background-color: #0d47a1;
+}

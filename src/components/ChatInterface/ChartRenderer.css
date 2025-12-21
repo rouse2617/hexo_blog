@@ -1,0 +1,101 @@
+.chart-container {
+  margin: 16px 0;
+  padding: 16px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chart-title {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+}
+
+.chart-error {
+  margin: 16px 0;
+  padding: 16px;
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+}
+
+.error-message {
+  color: #856404;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.retry-button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.retry-button:hover {
+  background-color: #0056b3;
+}
+
+.fallback-data {
+  margin-top: 16px;
+}
+
+.fallback-data h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.fallback-data table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.fallback-data th,
+.fallback-data td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.fallback-data th {
+  background-color: #f5f5f5;
+  font-weight: 600;
+  color: #333;
+}
+
+.fallback-data tr:hover {
+  background-color: #f9f9f9;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .chart-container {
+    background-color: #2a2a2a;
+  }
+
+  .chart-title {
+    color: #e0e0e0;
+  }
+
+  .fallback-data th {
+    background-color: #3a3a3a;
+    color: #e0e0e0;
+  }
+
+  .fallback-data td {
+    color: #d0d0d0;
+  }
+
+  .fallback-data tr:hover {
+    background-color: #333;
+  }
+}

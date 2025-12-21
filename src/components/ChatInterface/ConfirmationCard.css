@@ -1,0 +1,112 @@
+.confirmation-card {
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+  background-color: #f9f9f9;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.confirmation-card.risk-high {
+  border-color: #f44336;
+  background-color: #ffebee;
+}
+
+.confirmation-card.risk-medium {
+  border-color: #ff9800;
+  background-color: #fff3e0;
+}
+
+.confirmation-card.risk-low {
+  border-color: #4caf50;
+  background-color: #e8f5e9;
+}
+
+.confirmation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.confirmation-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+}
+
+.confirmation-timer {
+  font-weight: 500;
+  font-size: 14px;
+  color: #666;
+  background-color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.confirmation-body {
+  margin-bottom: 16px;
+}
+
+.confirmation-operation {
+  font-weight: 600;
+  font-size: 15px;
+  color: #222;
+  margin-bottom: 8px;
+}
+
+.confirmation-description {
+  font-size: 14px;
+  color: #555;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.confirmation-risk {
+  font-size: 13px;
+  color: #777;
+}
+
+.confirmation-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.confirmation-actions button {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-confirm {
+  background-color: #4caf50;
+  color: white;
+}
+
+.btn-confirm:hover {
+  background-color: #45a049;
+}
+
+.btn-cancel {
+  background-color: #f44336;
+  color: white;
+}
+
+.btn-cancel:hover {
+  background-color: #da190b;
+}
+
+.confirmation-status {
+  text-align: center;
+  font-weight: 600;
+  font-size: 15px;
+  color: #666;
+  padding: 8px;
+  background-color: #fff;
+  border-radius: 4px;
+}

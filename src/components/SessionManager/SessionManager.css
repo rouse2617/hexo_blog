@@ -1,0 +1,184 @@
+.session-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.session-manager-new-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.session-manager-new-button:hover {
+  background-color: #2563eb;
+}
+
+.session-manager-new-button:active {
+  background-color: #1d4ed8;
+}
+
+.session-manager-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.session-manager-history {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-manager-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background-color: transparent;
+  color: #374151;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.session-manager-toggle:hover {
+  background-color: #e5e7eb;
+}
+
+.session-manager-toggle .session-manager-icon {
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+
+.session-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding-left: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.session-manager-empty {
+  padding: 16px;
+  color: #9ca3af;
+  font-size: 13px;
+  text-align: center;
+}
+
+.session-manager-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background-color: #ffffff;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.session-manager-item:hover {
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.session-manager-item.active {
+  background-color: #dbeafe;
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.session-manager-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-manager-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.session-manager-item.active .session-manager-item-meta {
+  color: #3b82f6;
+}
+
+.session-manager-item-time {
+  font-weight: 500;
+}
+
+.session-manager-item-count {
+  opacity: 0.8;
+}
+
+/* Scrollbar styling */
+.session-manager-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.session-manager-list::-webkit-scrollbar-track {
+  background-color: #f3f4f6;
+}
+
+.session-manager-list::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 3px;
+}
+
+.session-manager-list::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .session-manager {
+    padding: 8px;
+  }
+
+  .session-manager-new-button {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .session-manager-toggle {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .session-manager-item {
+    padding: 8px 10px;
+  }
+
+  .session-manager-item-title {
+    font-size: 12px;
+  }
+
+  .session-manager-item-meta {
+    font-size: 10px;
+  }
+}

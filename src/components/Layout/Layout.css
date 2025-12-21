@@ -1,0 +1,210 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+/* Mobile Header */
+.layout-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #333;
+  z-index: 40;
+}
+
+.layout-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.drawer-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.87);
+  transition: color 0.2s;
+}
+
+.drawer-toggle:hover {
+  color: #646cff;
+}
+
+/* Layout Container */
+.layout-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Left Panel */
+.layout-left {
+  width: 280px;
+  background-color: #1e1e1e;
+  border-right: 1px solid #333;
+  overflow-y: auto;
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Main Content */
+.layout-main {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #242424;
+}
+
+/* Right Panel */
+.layout-right {
+  width: 320px;
+  background-color: #1e1e1e;
+  border-left: 1px solid #333;
+  overflow-y: auto;
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Panel Content */
+.panel-content {
+  padding: 1rem;
+}
+
+/* Drawer Overlay */
+.drawer-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 30;
+}
+
+/* Mobile Styles (< 768px) */
+@media (max-width: 767px) {
+  .layout-header {
+    display: flex;
+  }
+
+  .layout-left,
+  .layout-right {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: 50;
+    width: 280px;
+    transform: translateX(-100%);
+  }
+
+  .layout-left {
+    left: 0;
+  }
+
+  .layout-right {
+    right: 0;
+    left: auto;
+    transform: translateX(100%);
+  }
+
+  .layout-left.drawer-open {
+    transform: translateX(0);
+  }
+
+  .layout-right.drawer-open {
+    transform: translateX(0);
+  }
+
+  .drawer-overlay {
+    display: block;
+  }
+
+  .layout-main {
+    margin-top: 0;
+  }
+}
+
+/* Tablet Styles (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .layout-left {
+    width: 240px;
+  }
+
+  .layout-right {
+    width: 280px;
+  }
+}
+
+/* Desktop Styles (>= 1024px) */
+@media (min-width: 1024px) {
+  .layout-left {
+    width: 300px;
+  }
+
+  .layout-right {
+    width: 360px;
+  }
+}
+
+/* Light Mode */
+@media (prefers-color-scheme: light) {
+  .layout-header {
+    background-color: #ffffff;
+    border-bottom-color: #e5e5e5;
+  }
+
+  .layout-left,
+  .layout-right {
+    background-color: #f9f9f9;
+    border-color: #e5e5e5;
+  }
+
+  .layout-main {
+    background-color: #ffffff;
+  }
+
+  .drawer-toggle {
+    color: #213547;
+  }
+
+  .drawer-toggle:hover {
+    color: #747bff;
+  }
+}
+
+/* Smooth transitions for layout changes */
+.layout-left,
+.layout-right,
+.layout-main {
+  transition: width 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+/* Scrollbar Styling */
+.layout-left::-webkit-scrollbar,
+.layout-right::-webkit-scrollbar,
+.layout-main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.layout-left::-webkit-scrollbar-track,
+.layout-right::-webkit-scrollbar-track,
+.layout-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.layout-left::-webkit-scrollbar-thumb,
+.layout-right::-webkit-scrollbar-thumb,
+.layout-main::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.layout-left::-webkit-scrollbar-thumb:hover,
+.layout-right::-webkit-scrollbar-thumb:hover,
+.layout-main::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}

@@ -1,0 +1,101 @@
+/* CodeBlock Component Styles */
+
+.code-block-container {
+  margin: 1rem 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e1e4e8;
+  background-color: #f6f8fa;
+}
+
+.code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #e8eaed;
+  border-bottom: 1px solid #d1d5da;
+}
+
+.code-language {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #666;
+  letter-spacing: 0.5px;
+}
+
+.copy-button {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: #666;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.copy-button:hover {
+  background-color: #d1d5da;
+  color: #333;
+}
+
+.copy-button:active {
+  transform: scale(0.95);
+}
+
+.code-block-pre {
+  margin: 0;
+  padding: 16px;
+  overflow-x: auto;
+  background-color: #f6f8fa;
+}
+
+.code-block-pre::-webkit-scrollbar {
+  height: 8px;
+}
+
+.code-block-pre::-webkit-scrollbar-track {
+  background: #e1e4e8;
+}
+
+.code-block-pre::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.code-block-pre::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.code-block-pre code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #24292e;
+  display: block;
+}
+
+/* Basic syntax highlighting (will be replaced with proper highlighter) */
+.language-javascript .keyword,
+.language-typescript .keyword,
+.language-python .keyword {
+  color: #d73a49;
+  font-weight: 600;
+}
+
+.language-javascript .string,
+.language-typescript .string,
+.language-python .string {
+  color: #032f62;
+}
+
+.language-javascript .comment,
+.language-typescript .comment,
+.language-python .comment {
+  color: #6a737d;
+  font-style: italic;
+}
