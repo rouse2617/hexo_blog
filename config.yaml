@@ -1,0 +1,36 @@
+# AI-Ops 配置文件
+
+server:
+  addr: ":8080"
+  mode: debug  # debug / release
+
+llm:
+  endpoint: "http://localhost:11434/v1"
+  model: "qwen2.5:14b"
+  timeout: 60s
+  max_tokens: 4096
+  # api_key: ""  # 可选，或通过环境变量 LLM_API_KEY 设置
+
+ssh:
+  default_timeout: 30s
+  connect_timeout: 10s
+  max_connections: 100
+  max_concurrent: 20
+  keepalive_interval: 30s
+  default_user: root
+  default_key_path: ~/.ssh/id_rsa
+
+database:
+  driver: sqlite
+  dsn: ./data/aiops.db
+
+scripts:
+  dir: ./scripts
+
+agent:
+  max_loops: 10
+
+log:
+  level: info    # debug / info / warn / error
+  format: json   # json / text
+  output: stdout # stdout / 文件路径

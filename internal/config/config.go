@@ -1,0 +1,184 @@
+package config
+
+import (
+	"os"
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Config 应用配置
+type Config struct {
+	Server   ServerConfig   `yaml:"server"`
+	LLM      LLMConfig      `yaml:"llm"`
+	SSH      SSHConfig      `yaml:"ssh"`
+	Database DatabaseConfig `yaml:"database"`
+	Scripts  ScriptsConfig  `yaml:"scripts"`
+	Agent    AgentConfig    `yaml:"agent"`
+	Log      LogConfig      `yaml:"log"`
+}
+
+// ServerConfig 服务器配置
+type ServerConfig struct {
+	Addr string `yaml:"addr"` // 监听地址，如 :8080
+	Mode string `yaml:"mode"` // 运行模式: debug / release
+}
+
+// LLMConfig LLM 配置
+type LLMConfig struct {
+	Endpoint  string        `yaml:"endpoint"`   // API 端点
+	Model     string        `yaml:"model"`      // 模型名称
+	Timeout   time.Duration `yaml:"timeout"`    // 请求超时
+	MaxTokens int           `yaml:"max_tokens"` // 最大 token 数
+	APIKey    string        `yaml:"api_key"`    // API Key (可选)
+}
+
+// SSHConfig SSH 配置
+type SSHConfig struct {
+	DefaultTimeout    time.Duration `yaml:"default_timeout"`    // 默认执行超时
+	ConnectTimeout    time.Duration `yaml:"connect_timeout"`    // 连接超时
+	MaxConnections    int           `yaml:"max_connections"`    // 最大连接数
+	MaxConcurrent     int           `yaml:"max_concurrent"`     // 最大并发执行数
+	KeepaliveInterval time.Duration `yaml:"keepalive_interval"` // 心跳间隔
+	DefaultUser       string        `yaml:"default_user"`       // 默认用户
+	DefaultKeyPath    string        `yaml:"default_key_path"`   // 默认密钥路径
+}
+
+// DatabaseConfig 数据库配置
+type DatabaseConfig struct {
+	Driver string `yaml:"driver"` // 数据库驱动: sqlite / postgres
+	DSN    string `yaml:"dsn"`    // 数据源名称
+}
+
+// ScriptsConfig 脚本配置
+type ScriptsConfig struct {
+	Dir string `yaml:"dir"` // 脚本目录
+}
+
+// AgentConfig Agent 配置
+type AgentConfig struct {
+	MaxLoops int `yaml:"max_loops"` // 最大循环次数
+}
+
+// LogConfig 日志配置
+type LogConfig struct {
+	Level  string `yaml:"level"`  // 日志级别: debug / info / warn / error
+	Format string `yaml:"format"` // 日志格式: json / text
+	Output string `yaml:"output"` // 输出位置: stdout / 文件路径
+}
+
+// Load 从文件加载配置
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &Config{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, err
+	}
+
+	// 设置默认值
+	cfg.setDefaults()
+
+	// 从环境变量覆盖
+	cfg.loadFromEnv()
+
+	return cfg, nil
+}
+
+// setDefaults 设置默认值
+func (c *Config) setDefaults() {
+	// Server 默认值
+	if c.Server.Addr == "" {
+		c.Server.Addr = ":8080"
+	}
+	if c.Server.Mode == "" {
+		c.Server.Mode = "debug"
+	}
+
+	// LLM 默认值
+	if c.LLM.Endpoint == "" {
+		c.LLM.Endpoint = "http://localhost:11434/v1"
+	}
+	if c.LLM.Model == "" {
+		c.LLM.Model = "qwen2.5:14b"
+	}
+	if c.LLM.Timeout == 0 {
+		c.LLM.Timeout = 60 * time.Second
+	}
+	if c.LLM.MaxTokens == 0 {
+		c.LLM.MaxTokens = 4096
+	}
+
+	// SSH 默认值
+	if c.SSH.DefaultTimeout == 0 {
+		c.SSH.DefaultTimeout = 30 * time.Second
+	}
+	if c.SSH.ConnectTimeout == 0 {
+		c.SSH.ConnectTimeout = 10 * time.Second
+	}
+	if c.SSH.MaxConnections == 0 {
+		c.SSH.MaxConnections = 100
+	}
+	if c.SSH.MaxConcurrent == 0 {
+		c.SSH.MaxConcurrent = 20
+	}
+	if c.SSH.KeepaliveInterval == 0 {
+		c.SSH.KeepaliveInterval = 30 * time.Second
+	}
+	if c.SSH.DefaultUser == "" {
+		c.SSH.DefaultUser = "root"
+	}
+	if c.SSH.DefaultKeyPath == "" {
+		c.SSH.DefaultKeyPath = "~/.ssh/id_rsa"
+	}
+
+	// Database 默认值
+	if c.Database.Driver == "" {
+		c.Database.Driver = "sqlite"
+	}
+	if c.Database.DSN == "" {
+		c.Database.DSN = "./data/aiops.db"
+	}
+
+	// Scripts 默认值
+	if c.Scripts.Dir == "" {
+		c.Scripts.Dir = "./scripts"
+	}
+
+	// Agent 默认值
+	if c.Agent.MaxLoops == 0 {
+		c.Agent.MaxLoops = 10
+	}
+
+	// Log 默认值
+	if c.Log.Level == "" {
+		c.Log.Level = "info"
+	}
+	if c.Log.Format == "" {
+		c.Log.Format = "json"
+	}
+	if c.Log.Output == "" {
+		c.Log.Output = "stdout"
+	}
+}
+
+// loadFromEnv 从环境变量加载配置
+func (c *Config) loadFromEnv() {
+	// LLM API Key 优先从环境变量读取
+	if apiKey := os.Getenv("LLM_API_KEY"); apiKey != "" {
+		c.LLM.APIKey = apiKey
+	}
+
+	// 数据库 DSN 可从环境变量覆盖
+	if dsn := os.Getenv("DATABASE_DSN"); dsn != "" {
+		c.Database.DSN = dsn
+	}
+
+	// 服务器地址可从环境变量覆盖
+	if addr := os.Getenv("SERVER_ADDR"); addr != "" {
+		c.Server.Addr = addr
+	}
+}
