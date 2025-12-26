@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"os"
+
+	"go.uber.org/zap"
 
 	"ai-ops/internal/config"
+	"ai-ops/pkg/logger"
 )
 
 func main() {
@@ -14,13 +17,35 @@ func main() {
 	// 加载配置
 	cfg, err := config.Load("config.yaml")
 	if err != nil {
-		log.Fatalf("加载配置失败: %v", err)
+		fmt.Printf("加载配置失败: %v\n", err)
+		os.Exit(1)
 	}
 
-	fmt.Printf("配置加载成功:\n")
-	fmt.Printf("  - 服务地址: %s\n", cfg.Server.Addr)
-	fmt.Printf("  - 运行模式: %s\n", cfg.Server.Mode)
-	fmt.Printf("  - LLM 模型: %s\n", cfg.LLM.Model)
-	fmt.Printf("  - 数据库: %s (%s)\n", cfg.Database.Driver, cfg.Database.DSN)
-	fmt.Printf("  - 日志级别: %s\n", cfg.Log.Level)
+	// 初始化日志
+	err = logger.Init(logger.Config{
+		Level:  cfg.Log.Level,
+		Format: cfg.Log.Format,
+		Output: cfg.Log.Output,
+	})
+	if err != nil {
+		fmt.Printf("初始化日志失败: %v\n", err)
+		os.Exit(1)
+	}
+	defer logger.Sync()
+
+	// 使用日志输出
+	logger.Info("配置加载成功",
+		zap.String("addr", cfg.Server.Addr),
+		zap.String("mode", cfg.Server.Mode),
+		zap.String("llm_model", cfg.LLM.Model),
+		zap.String("database", cfg.Database.Driver),
+	)
+
+	logger.Debug("详细配置信息",
+		zap.Duration("llm_timeout", cfg.LLM.Timeout),
+		zap.Duration("ssh_timeout", cfg.SSH.DefaultTimeout),
+		zap.Int("max_loops", cfg.Agent.MaxLoops),
+	)
+
+	logger.Info("AI-Ops 服务启动完成")
 }
