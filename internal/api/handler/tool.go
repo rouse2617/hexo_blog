@@ -1,24 +1,43 @@
 package handler
 
 import (
+	"ai-ops/internal/repository"
 	"ai-ops/internal/ssh"
 	"ai-ops/internal/tool"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 // ToolHandler 工具处理器
 type ToolHandler struct {
-	registry *tool.Registry
-	sshPool  *ssh.Pool
+	registry   *tool.Registry
+	sshPool    *ssh.Pool
+	configRepo repository.ConfigRepository
 }
 
 // NewToolHandler 创建工具处理器
-func NewToolHandler(registry *tool.Registry, sshPool *ssh.Pool) *ToolHandler {
-	return &ToolHandler{
-		registry: registry,
-		sshPool:  sshPool,
+func NewToolHandler(registry *tool.Registry, sshPool *ssh.Pool, configRepo repository.ConfigRepository) *ToolHandler {
+	handler := &ToolHandler{
+		registry:   registry,
+		sshPool:    sshPool,
+		configRepo: configRepo,
 	}
+
+	// 设置启用状态检查函数
+	registry.SetEnableChecker(handler.isToolEnabled)
+
+	return handler
+}
+
+// isToolEnabled 检查工具是否启用（从配置读取）
+func (h *ToolHandler) isToolEnabled(name string) bool {
+	config, err := h.configRepo.Get("tool." + name + ".enabled")
+	if err != nil || config == nil {
+		// 默认启用
+		return true
+	}
+	return config.Value == "true"
 }
 
 // ListTools 获取工具列表
@@ -34,7 +53,7 @@ func (h *ToolHandler) ListTools(c *gin.Context) {
 			"description": info.Description,
 			"type":        info.Type,
 			"parameters":  info.Parameters,
-			"enabled":     true, // 默认启用
+			"enabled":     h.isToolEnabled(info.Name),
 		})
 	}
 
@@ -57,7 +76,7 @@ func (h *ToolHandler) ListBuiltinTools(c *gin.Context) {
 				"description": info.Description,
 				"type":        info.Type,
 				"parameters":  info.Parameters,
-				"enabled":     true,
+				"enabled":     h.isToolEnabled(info.Name),
 			})
 		}
 	}
@@ -78,7 +97,7 @@ func (h *ToolHandler) ListScriptTools(c *gin.Context) {
 				"description": info.Description,
 				"type":        info.Type,
 				"parameters":  info.Parameters,
-				"enabled":     true,
+				"enabled":     h.isToolEnabled(info.Name),
 			})
 		}
 	}
@@ -110,15 +129,17 @@ func (h *ToolHandler) ToggleTool(c *gin.Context) {
 		return
 	}
 
-	// 使用配置存储工具的启用状态（目前仅存储状态，实际执行时暂不检查）
-	// 注意：这个功能需要配合Registry的启用/禁用机制才能完全生效
-	// 目前只记录状态，实际执行时仍然会执行所有工具
-	// TODO: 未来可以扩展Registry以支持启用/禁用检查
+	// 保存工具的启用状态到配置
+	configKey := "tool." + name + ".enabled"
+	value := strconv.FormatBool(req.Enabled)
+	if err := h.configRepo.Set(configKey, value); err != nil {
+		InternalError(c, "保存工具状态失败: "+err.Error())
+		return
+	}
 
 	SuccessWithMessage(c, "操作成功", gin.H{
 		"name":    name,
 		"enabled": req.Enabled,
-		"note":    "工具启用/禁用状态已记录，但当前版本暂不影响实际执行",
 	})
 }
 

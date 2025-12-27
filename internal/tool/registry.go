@@ -6,11 +6,15 @@ import (
 	"sync"
 )
 
+// EnableChecker 启用状态检查函数
+type EnableChecker func(name string) bool
+
 // Registry 工具注册中心
 type Registry struct {
-	tools map[string]Tool
-	types map[string]string // 工具类型: builtin / script / remote
-	mu    sync.RWMutex
+	tools          map[string]Tool
+	types          map[string]string // 工具类型: builtin / script / remote
+	enableChecker  EnableChecker     // 启用状态检查函数
+	mu             sync.RWMutex
 }
 
 // NewRegistry 创建注册中心
@@ -18,7 +22,23 @@ func NewRegistry() *Registry {
 	return &Registry{
 		tools: make(map[string]Tool),
 		types: make(map[string]string),
+		// 默认所有工具都启用
+		enableChecker: func(name string) bool { return true },
 	}
+}
+
+// SetEnableChecker 设置启用状态检查函数
+func (r *Registry) SetEnableChecker(checker EnableChecker) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.enableChecker = checker
+}
+
+// IsEnabled 检查工具是否启用
+func (r *Registry) IsEnabled(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.enableChecker(name)
 }
 
 // Register 注册工具
@@ -76,7 +96,7 @@ func (r *Registry) List() []Tool {
 	return tools
 }
 
-// ListInfo 列出所有工具信息
+// ListInfo 列出所有工具信息（包括禁用的）
 func (r *Registry) ListInfo() []ToolInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -155,6 +175,11 @@ func (r *Registry) Execute(ctx *Context, name string, params map[string]interfac
 		return nil, fmt.Errorf("工具不存在: %s", name)
 	}
 
+	// 检查工具是否启用
+	if !r.IsEnabled(name) {
+		return nil, fmt.Errorf("工具已禁用: %s", name)
+	}
+
 	if params == nil {
 		params = make(map[string]interface{})
 	}
@@ -189,7 +214,11 @@ func (r *Registry) GeneratePrompt() string {
 	var sb strings.Builder
 	sb.WriteString("你有以下工具可用：\n\n")
 
-	for _, tool := range r.tools {
+	for name, tool := range r.tools {
+		// 只包含启用的工具
+		if !r.enableChecker(name) {
+			continue
+		}
 		sb.WriteString(fmt.Sprintf("## %s\n", tool.Name()))
 		sb.WriteString(fmt.Sprintf("描述: %s\n", tool.Description()))
 		sb.WriteString("参数:\n")
@@ -223,7 +252,11 @@ func (r *Registry) GenerateJSONSchema() []map[string]interface{} {
 
 	schemas := make([]map[string]interface{}, 0, len(r.tools))
 
-	for _, tool := range r.tools {
+	for name, tool := range r.tools {
+		// 只包含启用的工具
+		if !r.enableChecker(name) {
+			continue
+		}
 		properties := make(map[string]interface{})
 		required := make([]string, 0)
 

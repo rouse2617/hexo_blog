@@ -43,7 +43,7 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 	// 创建 handlers
 	chatHandler := handler.NewChatHandler(cfg.Agent, cfg.SessionRepo)
 	hostHandler := handler.NewHostHandler(cfg.SSHPool, cfg.HostRepo, cfg.GroupRepo)
-	toolHandler := handler.NewToolHandler(cfg.ToolRegistry, cfg.SSHPool)
+	toolHandler := handler.NewToolHandler(cfg.ToolRegistry, cfg.SSHPool, cfg.ConfigRepo)
 	systemHandler := handler.NewSystemHandler(cfg.Version, cfg.PolicyStore, cfg.AuditLogger, cfg.ConfigRepo)
 
 	// API 路由组

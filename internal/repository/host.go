@@ -87,7 +87,18 @@ func (r *hostRepository) List(filter HostFilter) ([]*model.Host, error) {
 		query = query.Where("name LIKE ? OR ip LIKE ? OR user LIKE ?", keyword, keyword, keyword)
 	}
 	if len(filter.Tags) > 0 {
-		// TODO: 实现标签过滤（需要 JSON 查询）
+		// SQLite JSON 数组过滤：检查 tags JSON 数组中是否包含任一指定标签
+		// 使用 JSON_EACH 函数展开 JSON 数组并检查值（OR 逻辑：匹配任一标签）
+		tagPlaceholders := make([]string, len(filter.Tags))
+		tagArgs := make([]interface{}, len(filter.Tags))
+		for i, tag := range filter.Tags {
+			tagPlaceholders[i] = "?"
+			tagArgs[i] = tag
+		}
+		// 构建查询：检查 tags JSON 数组中是否包含任一指定标签
+		query = query.Where(`EXISTS (
+			SELECT 1 FROM json_each(tags) WHERE value IN (`+strings.Join(tagPlaceholders, ",")+`)
+		)`, tagArgs...)
 	}
 
 	err := query.Order("created_at DESC").Find(&hosts).Error

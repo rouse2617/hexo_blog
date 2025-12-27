@@ -67,7 +67,8 @@ func setupToolHandler() (*ToolHandler, *gin.Engine, *tool.Registry) {
 	}
 	registry.RegisterBuiltin(failTool)
 
-	handler := NewToolHandler(registry, pool)
+	configRepo := newMockConfigRepository()
+	handler := NewToolHandler(registry, pool, configRepo)
 
 	r := gin.New()
 	api := r.Group("/api")
