@@ -19,12 +19,18 @@ export const useHostStore = defineStore('host', () => {
   const loading = ref(false)
   const currentHost = ref<Host | null>(null)
 
+  const normalizeHost = (h: Host): Host => {
+    const anyHost = h as any
+    const id = anyHost?.id ?? anyHost?.name
+    return { ...h, id }
+  }
+
   // 加载主机列表（分页）
   async function loadHosts(params?: { page?: number; pageSize?: number; keyword?: string }) {
     loading.value = true
     try {
       const data = await getHosts(params)
-      hosts.value = data.list
+      hosts.value = (data.list || []).map(normalizeHost)
       total.value = data.total
     } catch (error) {
       console.error('加载主机列表失败:', error)
@@ -37,7 +43,7 @@ export const useHostStore = defineStore('host', () => {
   async function loadAllHosts() {
     try {
       const data = await getAllHosts()
-      allHosts.value = data
+      allHosts.value = (data || []).map(normalizeHost)
     } catch (error) {
       console.error('加载所有主机失败:', error)
     }
@@ -46,7 +52,7 @@ export const useHostStore = defineStore('host', () => {
   // 获取单个主机
   async function fetchHost(id: string) {
     try {
-      currentHost.value = await getHost(id)
+      currentHost.value = normalizeHost(await getHost(id))
       return currentHost.value
     } catch (error) {
       console.error('获取主机详情失败:', error)
@@ -57,7 +63,7 @@ export const useHostStore = defineStore('host', () => {
   // 添加主机
   async function addHost(data: Omit<Host, 'id' | 'createdAt' | 'updatedAt'>) {
     try {
-      const newHost = await createHost(data)
+      const newHost = normalizeHost(await createHost(data))
       hosts.value.unshift(newHost)
       total.value++
       return newHost
@@ -70,7 +76,7 @@ export const useHostStore = defineStore('host', () => {
   // 更新主机
   async function editHost(id: string, data: Partial<Host>) {
     try {
-      const updated = await updateHost(id, data)
+      const updated = normalizeHost(await updateHost(id, data))
       const index = hosts.value.findIndex(h => h.id === id)
       if (index !== -1) {
         hosts.value[index] = updated
