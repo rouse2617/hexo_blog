@@ -2,7 +2,6 @@ package repository
 
 import (
 	"ai-ops/internal/model"
-	"time"
 
 	"gorm.io/gorm"
 )

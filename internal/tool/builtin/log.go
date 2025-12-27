@@ -20,8 +20,9 @@ func (t *QueryLogTool) Description() string {
 	return `查询指定节点的日志文件。
 支持的日志类型: nginx, app, system, custom
 可以按关键词过滤，指定查看行数。
+可以查询单个节点或批量查询多个节点。
 适用场景: 排查错误、查看访问记录、分析异常。
-当用户询问"查看日志"、"日志报错"、"错误日志"等问题时使用。`
+当用户询问"查看日志"、"日志报错"、"错误日志"、"多个节点的日志"等问题时使用。`
 }
 
 // Parameters 参数定义
@@ -30,8 +31,14 @@ func (t *QueryLogTool) Parameters() []tool.Parameter {
 		{
 			Name:        "host",
 			Type:        "string",
-			Description: "目标节点名称",
-			Required:    true,
+			Description: "目标节点名称，不填则需要指定 hosts",
+			Required:    false,
+		},
+		{
+			Name:        "hosts",
+			Type:        "[]string",
+			Description: "多个目标节点",
+			Required:    false,
 		},
 		{
 			Name:        "log_type",
@@ -73,6 +80,7 @@ func (t *QueryLogTool) Parameters() []tool.Parameter {
 func (t *QueryLogTool) Execute(ctx *tool.Context, params map[string]interface{}) (*tool.Result, error) {
 	// 获取参数
 	host := tool.GetStringParam(params, "host", "")
+	hosts := tool.GetStringSliceParam(params, "hosts")
 	logType := tool.GetStringParam(params, "log_type", "")
 	lines := tool.GetIntParam(params, "lines", 100)
 	keyword := tool.GetStringParam(params, "keyword", "")
@@ -80,8 +88,8 @@ func (t *QueryLogTool) Execute(ctx *tool.Context, params map[string]interface{})
 	level := tool.GetStringParam(params, "level", "")
 
 	// 参数验证
-	if host == "" {
-		return tool.NewErrorResult("参数 host 不能为空"), nil
+	if host == "" && len(hosts) == 0 {
+		return tool.NewErrorResult("请指定 host 或 hosts 参数"), nil
 	}
 	if logType == "" {
 		return tool.NewErrorResult("参数 log_type 不能为空"), nil
@@ -101,18 +109,60 @@ func (t *QueryLogTool) Execute(ctx *tool.Context, params map[string]interface{})
 		return tool.NewErrorResult("SSH 上下文未初始化"), nil
 	}
 
-	// 执行命令
-	output, err := ctx.SSH.Exec(host, cmd)
-	if err != nil {
-		return tool.NewErrorResult(fmt.Sprintf("执行失败: %v", err)), nil
+	if host != "" {
+		// 单节点
+		output, err := ctx.SSH.Exec(host, cmd)
+		if err != nil {
+			return tool.NewErrorResult(fmt.Sprintf("执行失败: %v", err)), nil
+		}
+
+		// 处理空结果
+		if strings.TrimSpace(output) == "" {
+			return tool.NewResult(map[string]interface{}{
+				"host":    host,
+				"log":     "",
+				"path":    logPath,
+				"message": "未找到匹配的日志内容",
+			}, fmt.Sprintf("未找到匹配的日志内容 (日志路径: %s)", logPath)), nil
+		}
+
+		return tool.NewResult(map[string]interface{}{
+			"host":  host,
+			"log":   strings.TrimSpace(output),
+			"path":  logPath,
+			"lines": lines,
+		}, fmt.Sprintf("成功获取 %s 的 %s 日志 (%d 行)", host, logType, lines)), nil
 	}
 
-	// 处理空结果
-	if strings.TrimSpace(output) == "" {
-		return tool.NewResult("", fmt.Sprintf("未找到匹配的日志内容 (日志路径: %s)", logPath)), nil
+	if len(hosts) > 0 {
+		// 多节点
+		data := make([]map[string]interface{}, 0, len(hosts))
+		for _, h := range hosts {
+			item := map[string]interface{}{
+				"host": h,
+				"path": logPath,
+			}
+			output, err := ctx.SSH.Exec(h, cmd)
+			if err != nil {
+				item["error"] = err.Error()
+				data = append(data, item)
+				continue
+			}
+
+			// 处理空结果
+			if strings.TrimSpace(output) == "" {
+				item["log"] = ""
+				item["message"] = "未找到匹配的日志内容"
+			} else {
+				item["log"] = strings.TrimSpace(output)
+				item["lines"] = lines
+			}
+			data = append(data, item)
+		}
+		return tool.NewResult(data, fmt.Sprintf("成功获取 %d 个节点的 %s 日志", len(hosts), logType)), nil
 	}
 
-	return tool.NewResult(output, fmt.Sprintf("成功获取 %s 的 %s 日志 (%d 行)", host, logType, lines)), nil
+	return tool.NewErrorResult("请指定 host 或 hosts 参数"), nil
 }
 
 // getLogPath 根据日志类型获取路径

@@ -65,7 +65,7 @@ func main() {
 	sessionRepo := repository.NewSessionRepository(db)
 	groupRepo := repository.NewGroupRepository(db)
 	configRepo := repository.NewConfigRepository(db)
-	analysisRepo := repository.NewAnalysisRepository(db)
+	_ = repository.NewAnalysisRepository(db) // 暂时未使用，为将来扩展准备
 
 	// 3. 初始化 SSH 连接池
 	sshPool := ssh.NewPool(ssh.Config{

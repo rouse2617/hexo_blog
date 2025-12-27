@@ -66,6 +66,7 @@ type ChatResponse struct {
 
 // ToolCallRecord 工具调用记录
 type ToolCallRecord struct {
+	ID     string                 `json:"id,omitempty"` // 工具调用ID，用于匹配
 	Tool   string                 `json:"tool"`
 	Params map[string]interface{} `json:"params"`
 	Result string                 `json:"result"`
@@ -177,6 +178,7 @@ func (a *Agent) executeToolCalls(ctx context.Context, toolCalls []llm.ToolCall, 
 			logger.Error("解析工具参数失败", zap.Error(err), zap.String("tool", tc.Function.Name))
 
 			record := ToolCallRecord{
+				ID:     tc.ID,
 				Tool:   tc.Function.Name,
 				Params: nil,
 				Error:  fmt.Sprintf("参数解析失败: %v", err),
@@ -200,6 +202,7 @@ func (a *Agent) executeToolCalls(ctx context.Context, toolCalls []llm.ToolCall, 
 		result, err := a.toolRegistry.Execute(toolCtx, tc.Function.Name, params)
 
 		record := ToolCallRecord{
+			ID:     tc.ID,
 			Tool:   tc.Function.Name,
 			Params: params,
 		}

@@ -241,8 +241,10 @@ export const useChatStore = defineStore('chat', () => {
             case 'tool_result':
               try {
                 const result = rawData || JSON.parse(chunk)
-                // 更新 message 中的工具调用状态
-                const toolCall = currentToolCalls.value.find(t => t.name === result.tool)
+                // 更新 message 中的工具调用状态（优先使用ID匹配，如果没有ID则使用名称）
+                const toolCall = result.id
+                  ? currentToolCalls.value.find(t => t.id === result.id)
+                  : currentToolCalls.value.find(t => t.name === result.tool)
                 if (toolCall) {
                   toolCall.result = typeof result.result === 'string'
                     ? result.result
@@ -250,9 +252,11 @@ export const useChatStore = defineStore('chat', () => {
                   toolCall.status = result.error ? 'error' : 'success'
                 }
 
-                // 更新思考步骤中的工具调用状态
+                // 更新思考步骤中的工具调用状态（优先使用ID匹配）
                 for (const step of thinkingSteps.value) {
-                  const stepToolCall = step.toolCalls?.find(t => t.tool === result.tool)
+                  const stepToolCall = result.id
+                    ? step.toolCalls?.find(t => t.id === result.id)
+                    : step.toolCalls?.find(t => t.tool === result.tool)
                   if (stepToolCall) {
                     stepToolCall.result = typeof result.result === 'string'
                       ? result.result

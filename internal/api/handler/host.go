@@ -191,7 +191,6 @@ func (h *HostHandler) GetAllHosts(c *gin.Context) {
 	Success(c, hosts)
 }
 
-
 // CreateHost 添加主机
 // POST /api/hosts
 func (h *HostHandler) CreateHost(c *gin.Context) {
@@ -200,6 +199,10 @@ func (h *HostHandler) CreateHost(c *gin.Context) {
 		ParamError(c, "参数错误: "+err.Error())
 		return
 	}
+
+	// 去除名称和地址的前后空格
+	req.Name = strings.TrimSpace(req.Name)
+	req.Host = strings.TrimSpace(req.Host)
 
 	// 设置默认值
 	if req.Port == 0 {
@@ -218,7 +221,7 @@ func (h *HostHandler) CreateHost(c *gin.Context) {
 	// 生成ID（使用name作为ID，保持与SSH Pool一致）
 	hostID := req.Name
 	if req.ID != "" {
-		hostID = req.ID
+		hostID = strings.TrimSpace(req.ID)
 	}
 
 	// 保存到数据库
@@ -294,10 +297,24 @@ func (h *HostHandler) UpdateHost(c *gin.Context) {
 		return
 	}
 
+	// 去除名称和地址的前后空格
+	req.Name = strings.TrimSpace(req.Name)
+	req.Host = strings.TrimSpace(req.Host)
+
 	user := req.getUser()
 	authType := req.getAuthType()
 
-	// 更新数据库
+	// 更新数据库（如果名称发生变化，也需要更新Name和ID）
+	if req.Name != "" && req.Name != existingHost.Name {
+		// 检查新名称是否已被使用
+		if _, err := h.hostRepo.GetByName(req.Name); err == nil {
+			ParamError(c, "主机名已存在: "+req.Name)
+			return
+		}
+		existingHost.Name = req.Name
+		// 注意：这里不更新ID，因为ID是主键，更新ID需要特殊处理
+		// 如果确实需要更改ID，需要删除旧记录并创建新记录
+	}
 	existingHost.IP = req.Host
 	existingHost.Port = req.Port
 	existingHost.User = user
@@ -316,7 +333,7 @@ func (h *HostHandler) UpdateHost(c *gin.Context) {
 	// 更新 SSH Pool
 	h.sshPool.RemoveHost(id)
 	h.sshPool.AddHost(ssh.HostInfo{
-		Name:       existingHost.Name,
+		Name:       existingHost.Name, // 使用 existingHost.Name 而不是 req.Name，因为Name可能没有更新
 		Host:       req.Host,
 		Port:       req.Port,
 		User:       user,
@@ -476,6 +493,10 @@ func (h *HostHandler) ImportHosts(c *gin.Context) {
 	imported := 0
 	failed := 0
 	for _, hostInfo := range hosts {
+		// 去除名称和地址的前后空格
+		hostInfo.Name = strings.TrimSpace(hostInfo.Name)
+		hostInfo.Host = strings.TrimSpace(hostInfo.Host)
+
 		// 检查主机名是否已存在
 		if _, err := h.hostRepo.GetByName(hostInfo.Name); err == nil {
 			failed++

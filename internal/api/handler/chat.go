@@ -258,6 +258,7 @@ func (h *ChatHandler) chatStream(c *gin.Context, req ChatRequest) {
 					Error:  chunk.ToolResult.Error,
 				})
 				c.SSEvent("tool_result", gin.H{
+					"id":     chunk.ToolResult.ID,
 					"tool":   chunk.ToolResult.Tool,
 					"params": chunk.ToolResult.Params,
 					"result": chunk.ToolResult.Result,
