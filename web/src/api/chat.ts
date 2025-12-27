@@ -43,12 +43,18 @@ export function sendMessage(data: ChatRequest) {
 
 // 获取会话历史
 export function getChatHistory(sessionId: string) {
-  return request.get<Message[]>(`/chat/history/${sessionId}`)
+  return request.get<any>(`/chat/history/${sessionId}`).then((res) => {
+    if (Array.isArray(res)) return res as Message[]
+    return (res?.messages ?? []) as Message[]
+  })
 }
 
 // 获取所有会话列表
 export function getSessions() {
-  return request.get<{ id: string; title: string; createdAt: string }[]>('/chat/sessions')
+  return request.get<any>('/chat/sessions').then((res) => {
+    if (Array.isArray(res)) return res as { id: string; title: string; createdAt: string }[]
+    return (res?.sessions ?? []) as { id: string; title: string; createdAt: string }[]
+  })
 }
 
 // 删除会话
