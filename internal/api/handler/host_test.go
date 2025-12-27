@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"ai-ops/internal/model"
 	"ai-ops/internal/ssh"
 
 	"github.com/gin-gonic/gin"
@@ -20,7 +22,9 @@ func init() {
 
 func setupHostHandler() (*HostHandler, *gin.Engine) {
 	pool := ssh.NewPool(ssh.Config{})
-	handler := NewHostHandler(pool)
+	hostRepo := newMockHostRepository()
+	groupRepo := newMockGroupRepository()
+	handler := NewHostHandler(pool, hostRepo, groupRepo)
 
 	r := gin.New()
 	api := r.Group("/api")
@@ -431,7 +435,16 @@ func TestCreateGroup_MissingName(t *testing.T) {
 
 // TestDeleteGroup_Success 测试删除分组成功
 func TestDeleteGroup_Success(t *testing.T) {
-	_, r := setupHostHandler()
+	handler, r := setupHostHandler()
+
+	// 先创建一个分组
+	groupRepo := handler.groupRepo
+	group := &model.Group{
+		ID:        "test-group-id",
+		Name:      "test-group",
+		CreatedAt: time.Now(),
+	}
+	groupRepo.Create(group)
 
 	req, _ := http.NewRequest("DELETE", "/api/groups/test-group", nil)
 	w := httptest.NewRecorder()

@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"ai-ops/internal/agent"
 	"ai-ops/internal/llm"
+	"ai-ops/internal/model"
 	"ai-ops/internal/ssh"
 	"ai-ops/internal/tool"
 
@@ -32,7 +34,8 @@ func setupChatHandler() (*ChatHandler, *gin.Engine) {
 		MaxLoops: 5,
 	})
 
-	handler := NewChatHandler(aiAgent)
+	sessionRepo := newMockSessionRepository()
+	handler := NewChatHandler(aiAgent, sessionRepo)
 
 	r := gin.New()
 	api := r.Group("/api")
@@ -87,9 +90,20 @@ func TestGetHistory_MissingSessionID(t *testing.T) {
 
 // TestGetHistory_WithSessionID 测试获取历史带session_id
 func TestGetHistory_WithSessionID(t *testing.T) {
-	_, r := setupChatHandler()
+	handler, r := setupChatHandler()
 
-	req, _ := http.NewRequest("GET", "/api/chat/history?session_id=test-session", nil)
+	// 先创建一个会话
+	sessionID := "test-session"
+	sessionRepo := handler.sessionRepo
+	session := &model.Session{
+		ID:        sessionID,
+		Title:     "Test Session",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	sessionRepo.Create(session)
+
+	req, _ := http.NewRequest("GET", "/api/chat/history?session_id="+sessionID, nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -101,7 +115,7 @@ func TestGetHistory_WithSessionID(t *testing.T) {
 	assert.Equal(t, CodeSuccess, resp.Code)
 
 	data := resp.Data.(map[string]interface{})
-	assert.Equal(t, "test-session", data["session_id"])
+	assert.Equal(t, sessionID, data["session_id"])
 	assert.NotNil(t, data["messages"])
 }
 

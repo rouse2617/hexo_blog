@@ -13,7 +13,8 @@ import (
 )
 
 func setupSystemHandler() (*SystemHandler, *gin.Engine) {
-	handler := NewSystemHandler("0.1.0-test", nil, nil)
+	configRepo := newMockConfigRepository()
+	handler := NewSystemHandler("0.1.0-test", nil, nil, configRepo)
 
 	r := gin.New()
 	api := r.Group("/api")
