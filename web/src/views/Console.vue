@@ -13,7 +13,7 @@
     >
       <template #left>
         <div class="left-panel-content">
-          <HostSelector />
+          <HostTree />
         </div>
       </template>
       <template #right>
@@ -58,7 +58,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import HostSelector from '@/components/console/HostSelector.vue'
+import HostTree from '@/components/console/HostTree.vue'
 import OperationPanel from '@/components/console/OperationPanel.vue'
 import ResultOverview from '@/components/console/ResultOverview.vue'
 import ResultDetail from '@/components/console/ResultDetail.vue'
