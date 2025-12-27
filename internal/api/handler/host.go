@@ -303,8 +303,8 @@ func (h *HostHandler) TestConnection(c *gin.Context) {
 		return
 	}
 
-	// 执行简单命令测试连接
-	output, err := h.sshPool.Exec(id, "echo 'connection test'")
+	// 执行简单命令测试连接（命令需符合只读白名单策略）
+	output, err := h.sshPool.Exec(id, "uptime")
 	if err != nil {
 		SSHError(c, "连接失败: "+err.Error())
 		return
