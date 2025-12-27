@@ -65,7 +65,7 @@ func main() {
 	sessionRepo := repository.NewSessionRepository(db)
 	groupRepo := repository.NewGroupRepository(db)
 	configRepo := repository.NewConfigRepository(db)
-	_ = repository.NewAnalysisRepository(db) // 暂时未使用，为将来扩展准备
+	analysisRepo := repository.NewAnalysisRepository(db)
 
 	// 3. 初始化 SSH 连接池
 	sshPool := ssh.NewPool(ssh.Config{
@@ -227,6 +227,8 @@ func main() {
 		SessionRepo:  sessionRepo,
 		GroupRepo:    groupRepo,
 		ConfigRepo:   configRepo,
+		AnalysisRepo: analysisRepo,
+		LLMClient:    llmClient,
 		Version:      Version,
 		Mode:         cfg.Server.Mode,
 	})

@@ -34,6 +34,10 @@
         <el-icon><List /></el-icon>
         <span>任务历史</span>
       </el-menu-item>
+      <el-menu-item index="/console">
+        <el-icon><Operation /></el-icon>
+        <span>控制台</span>
+      </el-menu-item>
       <el-menu-item index="/settings">
         <el-icon><Setting /></el-icon>
         <span>安全设置</span>
@@ -48,7 +52,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ChatDotRound, Monitor, SetUp, Document, List, Setting } from '@element-plus/icons-vue'
+import { ChatDotRound, Monitor, SetUp, Document, List, Setting, Operation } from '@element-plus/icons-vue'
 
 const route = useRoute()
 

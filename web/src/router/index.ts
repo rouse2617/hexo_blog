@@ -41,6 +41,12 @@ const routes: RouteRecordRaw[] = [
     name: 'Settings',
     component: () => import('@/views/Settings.vue'),
     meta: { title: '安全设置' }
+  },
+  {
+    path: '/console',
+    name: 'Console',
+    component: () => import('@/views/Console.vue'),
+    meta: { title: '控制台' }
   }
 ]
 

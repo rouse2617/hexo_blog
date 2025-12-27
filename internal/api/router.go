@@ -3,6 +3,7 @@ package api
 import (
 	"ai-ops/internal/agent"
 	"ai-ops/internal/api/handler"
+	"ai-ops/internal/llm"
 	"ai-ops/internal/repository"
 	"ai-ops/internal/security"
 	"ai-ops/internal/ssh"
@@ -22,6 +23,8 @@ type RouterConfig struct {
 	SessionRepo  repository.SessionRepository
 	GroupRepo    repository.GroupRepository
 	ConfigRepo   repository.ConfigRepository
+	AnalysisRepo repository.AnalysisRepository
+	LLMClient    *llm.OpenAIClient
 	Version      string
 	Mode         string // debug / release
 }
@@ -46,6 +49,7 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 	toolHandler := handler.NewToolHandler(cfg.ToolRegistry, cfg.SSHPool, cfg.ConfigRepo)
 	systemHandler := handler.NewSystemHandler(cfg.Version, cfg.PolicyStore, cfg.AuditLogger, cfg.ConfigRepo)
 	operationsHandler := handler.NewOperationsHandler(cfg.ToolRegistry, cfg.SSHPool)
+	analysisHandler := handler.NewAnalysisHandler(cfg.LLMClient, cfg.AnalysisRepo)
 
 	// API 路由组
 	api := r.Group("/api")
@@ -113,6 +117,15 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 		operations := api.Group("/operations")
 		{
 			operations.POST("/batch-execute", operationsHandler.BatchExecute)
+		}
+
+		// AI分析 API
+		analysis := api.Group("/analysis")
+		{
+			analysis.POST("/analyze", analysisHandler.Analyze)
+			analysis.GET("/history", analysisHandler.GetHistory)
+			analysis.GET("/:id", analysisHandler.GetAnalysis)
+			analysis.DELETE("/:id", analysisHandler.DeleteAnalysis)
 		}
 	}
 

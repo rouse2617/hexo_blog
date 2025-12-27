@@ -6,6 +6,7 @@ export interface Host {
   host: string
   port: number
   username: string
+  group?: string
   password?: string
   privateKey?: string
   description?: string
