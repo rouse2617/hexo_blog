@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -182,18 +183,27 @@ func (p *Pool) createConnection(name string, info HostInfo) (*ssh.Client, error)
 	case "key", "":
 		// 从文件读取密钥
 		keyPath := info.KeyPath
+		home, homeErr := os.UserHomeDir()
 		if keyPath == "" {
-			keyPath = os.ExpandEnv("$HOME/.ssh/id_rsa")
+			if homeErr != nil || home == "" {
+				return nil, fmt.Errorf("未配置 key_path 且无法确定用户主目录，请改用 password 认证或显式指定 key_path")
+			}
+			keyPath = filepath.Join(home, ".ssh", "id_rsa")
 		}
-		// 展开 ~ 路径
+		// 展开 ~ 路径（使用当前运行用户的 home，而不是依赖 $HOME 环境变量）
 		if strings.HasPrefix(keyPath, "~") {
-			home, _ := os.UserHomeDir()
+			if homeErr != nil || home == "" {
+				return nil, fmt.Errorf("展开密钥路径失败（无法确定用户主目录），请显式指定 key_path")
+			}
 			keyPath = strings.Replace(keyPath, "~", home, 1)
+		}
+		if _, err := os.Stat(keyPath); err != nil {
+			return nil, fmt.Errorf("读取密钥文件失败: %w（请检查 key_path 或改用 password 认证）", err)
 		}
 
 		key, err := os.ReadFile(keyPath)
 		if err != nil {
-			return nil, fmt.Errorf("读取密钥文件失败: %w", err)
+			return nil, fmt.Errorf("读取密钥文件失败: %w（请检查 key_path 或改用 password 认证）", err)
 		}
 
 		signer, err := ssh.ParsePrivateKey(key)
