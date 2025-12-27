@@ -9,7 +9,7 @@ llm:
   model: "qwen3-4b-thinking"
   timeout: 120s
   max_tokens: 4096
-  api_key: ""
+  api_key: "sk-DrzHNG3Avt6eTP2DndOwnIoW9V3vfgxYOEo6gh3jlkrgJFDB"
 
 ssh:
   default_timeout: 30s
@@ -33,30 +33,15 @@ hosts:
     port: 22
     auth_type: password
     user: hrp
-    password: ""
+    password: "hrp"
   #
   # 示例：使用密码认证
-  - name: node3
+  - name: rui.vin
     host: rui.vin 
     user: root
     auth_type: password
-    password: ""
-  #
-  # 示例：指定私钥路径
-  # - name: node4
-  #   host: 192.168.1.13
-  #   key_path: ~/.ssh/other_key
-  #
-  # 示例：带分组和标签
-  # - name: web-server-1
-  #   host: 192.168.1.20
-  #   group: production
-  #   tags: [web, nginx]
-  #
-  # - name: db-server-1
-  #   host: 192.168.1.30
-  #   group: production
-  #   tags: [database, mysql]
+    password: "Hrp5490295"
+  
 
 database:
   driver: sqlite
