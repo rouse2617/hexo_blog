@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -174,6 +176,29 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, messages []Message, callb
 
 // ChatStreamWithTools 带工具调用的流式对话
 func (c *OpenAIClient) ChatStreamWithTools(ctx context.Context, messages []Message, tools []ToolDef, callback StreamCallback) error {
+	// 流式请求不能使用 http.Client.Timeout，否则会在读取 body 时触发 Client.Timeout 导致 context deadline exceeded。
+	// 这里为流式请求创建一个不设置 Timeout 的 client，并用更宽松的 ctx 超时来控制整体生命周期。
+	streamTimeout := c.timeout
+	if streamTimeout < 5*time.Minute {
+		streamTimeout = 5 * time.Minute
+	}
+	streamCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		streamCtx, cancel = context.WithTimeout(ctx, streamTimeout)
+		defer cancel()
+	}
+
+	transport := c.httpClient.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	streamHTTPClient := &http.Client{Transport: transport}
+
+	return c.chatStreamWithToolsOnce(streamCtx, streamHTTPClient, messages, tools, callback, true)
+}
+
+func (c *OpenAIClient) chatStreamWithToolsOnce(ctx context.Context, httpClient *http.Client, messages []Message, tools []ToolDef, callback StreamCallback, allowRetry bool) error {
 	reqBody := openAIRequest{
 		Model:     c.model,
 		Messages:  messages,
@@ -201,8 +226,11 @@ func (c *OpenAIClient) ChatStreamWithTools(ctx context.Context, messages []Messa
 		req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
+		if allowRetry && isTransientStreamError(err) {
+			return c.chatStreamWithToolsOnce(ctx, httpClient, messages, tools, callback, false)
+		}
 		return fmt.Errorf("请求失败: %w", err)
 	}
 	defer resp.Body.Close()
@@ -221,6 +249,9 @@ func (c *OpenAIClient) ChatStreamWithTools(ctx context.Context, messages []Messa
 		if err != nil {
 			if err == io.EOF {
 				break
+			}
+			if allowRetry && isTransientStreamError(err) {
+				return c.chatStreamWithToolsOnce(ctx, httpClient, messages, tools, callback, false)
 			}
 			return fmt.Errorf("读取流失败: %w", err)
 		}
@@ -293,6 +324,24 @@ func (c *OpenAIClient) ChatStreamWithTools(ctx context.Context, messages []Messa
 	}
 
 	return nil
+}
+
+func isTransientStreamError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	if ne, ok := err.(net.Error); ok {
+		return ne.Timeout() || ne.Temporary()
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "wsarecv") ||
+		strings.Contains(msg, "forcibly closed") ||
+		strings.Contains(msg, "connection reset")
 }
 
 // GetModel 获取当前模型
