@@ -24,17 +24,17 @@ function Kill-Port([int]$p) {
     return
   }
   $pids = $conns | Select-Object -ExpandProperty OwningProcess -Unique
-  foreach ($pid in $pids) {
+  foreach ($procId in $pids) {
     try {
-      $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+      $proc = Get-Process -Id $procId -ErrorAction SilentlyContinue
       if ($null -ne $proc) {
-        Write-Warn "Killing process on port ${p}: $($proc.ProcessName) (PID ${pid})"
+        Write-Warn "Killing process on port ${p}: $($proc.ProcessName) (PID ${procId})"
       } else {
-        Write-Warn "Killing PID ${pid} on port ${p}"
+        Write-Warn "Killing PID ${procId} on port ${p}"
       }
-      Stop-Process -Id $pid -Force
+      Stop-Process -Id $procId -Force
     } catch {
-      Write-Warn "Failed to kill PID ${pid}: $($_.Exception.Message)"
+      Write-Warn "Failed to kill PID ${procId}: $($_.Exception.Message)"
     }
   }
 }
