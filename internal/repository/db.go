@@ -23,6 +23,7 @@ func InitDB(dsn string) (*gorm.DB, error) {
 		&model.Session{},
 		&model.Message{},
 		&model.Config{},
+		&model.Analysis{},
 	)
 	if err != nil {
 		return nil, err
