@@ -123,44 +123,69 @@ const filteredHosts = computed(() => {
 // 选中的主机
 const selectedHosts = computed(() => consoleStore.selectedHosts)
 
-// 监听选中变化，同步到store
+// 用于防止循环更新的标志
+const isUpdatingFromStore = ref(false)
+
+// 监听选中变化，同步到表格（仅在外部修改store时触发，不监听用户手动选择）
 watch(
   () => consoleStore.selectedHosts,
-  (newHosts) => {
-    // 更新表格选中状态
-    if (tableRef.value) {
-      tableRef.value.clearSelection()
-      nextTick(() => {
-        filteredHosts.value.forEach((host) => {
-          if (newHosts.includes(host.id || host.name)) {
-            tableRef.value?.toggleRowSelection(host, true)
-          }
+  (newHosts, oldHosts) => {
+    // 如果是由store变化触发的，且不是当前正在更新，则同步到表格
+    if (!isUpdatingFromStore.value && tableRef.value) {
+      const newSet = new Set(newHosts)
+      const oldSet = new Set(oldHosts || [])
+      
+      // 检查是否有实际变化
+      if (newSet.size !== oldSet.size || 
+          [...newSet].some(id => !oldSet.has(id)) ||
+          [...oldSet].some(id => !newSet.has(id))) {
+        nextTick(() => {
+          tableRef.value?.clearSelection()
+          filteredHosts.value.forEach((host) => {
+            const hostId = host.id || host.name
+            if (newHosts.includes(hostId)) {
+              tableRef.value?.toggleRowSelection(host, true)
+            }
+          })
         })
-      })
+      }
     }
   },
   { deep: true }
 )
 
-// 选择变化处理
+// 选择变化处理（用户手动点击复选框时触发）
 const handleSelectionChange = (hosts: Host[]) => {
+  isUpdatingFromStore.value = true
   const hostIds = hosts.map(h => h.id || h.name)
   consoleStore.selectHosts(hostIds)
+  nextTick(() => {
+    isUpdatingFromStore.value = false
+  })
 }
 
 // 全选
 const handleSelectAll = () => {
+  isUpdatingFromStore.value = true
   tableRef.value?.toggleAllSelection()
+  nextTick(() => {
+    isUpdatingFromStore.value = false
+  })
 }
 
 // 清空选择
 const handleSelectNone = () => {
+  isUpdatingFromStore.value = true
   tableRef.value?.clearSelection()
   consoleStore.clearSelection()
+  nextTick(() => {
+    isUpdatingFromStore.value = false
+  })
 }
 
 // 反选
 const handleSelectInverse = () => {
+  isUpdatingFromStore.value = true
   const currentSelected = new Set(selectedHosts.value)
   const newSelected = filteredHosts.value
     .filter(h => !currentSelected.has(h.id || h.name))
@@ -175,6 +200,7 @@ const handleSelectInverse = () => {
         tableRef.value?.toggleRowSelection(host, true)
       }
     })
+    isUpdatingFromStore.value = false
   })
 }
 
@@ -203,6 +229,17 @@ const getStatusText = (status?: string) => {
 // 加载主机列表
 onMounted(async () => {
   await hostStore.loadAllHosts()
+  // 初始化时同步已选中的主机到表格
+  if (consoleStore.selectedHosts.length > 0 && tableRef.value) {
+    nextTick(() => {
+      filteredHosts.value.forEach((host) => {
+        const hostId = host.id || host.name
+        if (consoleStore.selectedHosts.includes(hostId)) {
+          tableRef.value?.toggleRowSelection(host, true)
+        }
+      })
+    })
+  }
 })
 </script>
 
