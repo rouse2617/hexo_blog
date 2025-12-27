@@ -1,10 +1,15 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"ai-ops/internal/model"
 	"ai-ops/internal/repository"
 	"ai-ops/internal/ssh"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -440,8 +445,8 @@ func (h *HostHandler) TestConnection(c *gin.Context) {
 // POST /api/hosts/import
 func (h *HostHandler) ImportHosts(c *gin.Context) {
 	var req struct {
-		Format string `json:"format"` // csv / json
-		Data   string `json:"data"`
+		Format string `json:"format" binding:"required"` // csv / json
+		Data   string `json:"data" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -449,8 +454,146 @@ func (h *HostHandler) ImportHosts(c *gin.Context) {
 		return
 	}
 
-	// TODO: 实现导入逻辑
-	SuccessWithMessage(c, "导入功能开发中", nil)
+	var hosts []HostInfo
+	var err error
+
+	switch req.Format {
+	case "json":
+		hosts, err = parseJSONHosts(req.Data)
+	case "csv":
+		hosts, err = parseCSVHosts(req.Data)
+	default:
+		ParamError(c, "不支持的格式，仅支持 csv 或 json")
+		return
+	}
+
+	if err != nil {
+		ParamError(c, "解析数据失败: "+err.Error())
+		return
+	}
+
+	// 导入主机
+	imported := 0
+	failed := 0
+	for _, hostInfo := range hosts {
+		// 检查主机名是否已存在
+		if _, err := h.hostRepo.GetByName(hostInfo.Name); err == nil {
+			failed++
+			continue
+		}
+
+		// 设置默认值
+		if hostInfo.Port == 0 {
+			hostInfo.Port = 22
+		}
+		user := hostInfo.getUser()
+		authType := hostInfo.getAuthType()
+
+		// 保存到数据库
+		hostModel := &model.Host{
+			ID:         hostInfo.Name,
+			Name:       hostInfo.Name,
+			IP:         hostInfo.Host,
+			Port:       hostInfo.Port,
+			User:       user,
+			Group:      hostInfo.Group,
+			Tags:       hostInfo.Tags,
+			AuthType:   authType,
+			Password:   hostInfo.Password,
+			KeyPath:    hostInfo.KeyPath,
+			KeyContent: hostInfo.PrivateKey,
+			Status:     model.HostStatusUnknown,
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
+		}
+		if err := h.hostRepo.Create(hostModel); err != nil {
+			failed++
+			continue
+		}
+
+		// 添加到SSH Pool
+		h.sshPool.AddHost(ssh.HostInfo{
+			Name:       hostInfo.Name,
+			Host:       hostInfo.Host,
+			Port:       hostInfo.Port,
+			User:       user,
+			Group:      hostInfo.Group,
+			Tags:       hostInfo.Tags,
+			AuthType:   authType,
+			Password:   hostInfo.Password,
+			KeyPath:    hostInfo.KeyPath,
+			KeyContent: hostInfo.PrivateKey,
+		})
+
+		imported++
+	}
+
+	Success(c, gin.H{
+		"imported": imported,
+		"failed":   failed,
+		"total":    len(hosts),
+	})
+}
+
+// parseJSONHosts 解析JSON格式的主机数据
+func parseJSONHosts(data string) ([]HostInfo, error) {
+	var hosts []HostInfo
+	if err := json.Unmarshal([]byte(data), &hosts); err != nil {
+		return nil, err
+	}
+	return hosts, nil
+}
+
+// parseCSVHosts 解析CSV格式的主机数据
+// CSV格式: name,host,port,user,group,auth_type,password,key_path
+func parseCSVHosts(data string) ([]HostInfo, error) {
+	lines := strings.Split(strings.TrimSpace(data), "\n")
+	if len(lines) == 0 {
+		return nil, fmt.Errorf("CSV数据为空")
+	}
+
+	var hosts []HostInfo
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Split(line, ",")
+		if len(fields) < 2 {
+			return nil, fmt.Errorf("第%d行格式错误，至少需要name和host字段", i+1)
+		}
+
+		host := HostInfo{
+			Name: strings.TrimSpace(fields[0]),
+			Host: strings.TrimSpace(fields[1]),
+		}
+
+		if len(fields) > 2 && strings.TrimSpace(fields[2]) != "" {
+			if port, err := strconv.Atoi(strings.TrimSpace(fields[2])); err == nil {
+				host.Port = port
+			}
+		}
+		if len(fields) > 3 {
+			host.User = strings.TrimSpace(fields[3])
+		}
+		if len(fields) > 4 {
+			host.Group = strings.TrimSpace(fields[4])
+		}
+		if len(fields) > 5 {
+			host.AuthType = strings.TrimSpace(fields[5])
+		}
+		if len(fields) > 6 {
+			host.Password = strings.TrimSpace(fields[6])
+		}
+		if len(fields) > 7 {
+			host.KeyPath = strings.TrimSpace(fields[7])
+		}
+
+		hosts = append(hosts, host)
+	}
+
+	return hosts, nil
 }
 
 // GetGroups 获取分组列表

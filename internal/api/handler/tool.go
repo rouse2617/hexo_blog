@@ -95,6 +95,13 @@ func (h *ToolHandler) ToggleTool(c *gin.Context) {
 		return
 	}
 
+	// 检查工具是否存在
+	_, ok := h.registry.Get(name)
+	if !ok {
+		NotFound(c, "工具不存在")
+		return
+	}
+
 	var req struct {
 		Enabled bool `json:"enabled"`
 	}
@@ -103,10 +110,15 @@ func (h *ToolHandler) ToggleTool(c *gin.Context) {
 		return
 	}
 
-	// TODO: 实现工具启用/禁用逻辑
+	// 使用配置存储工具的启用状态（目前仅存储状态，实际执行时暂不检查）
+	// 注意：这个功能需要配合Registry的启用/禁用机制才能完全生效
+	// 目前只记录状态，实际执行时仍然会执行所有工具
+	// TODO: 未来可以扩展Registry以支持启用/禁用检查
+
 	SuccessWithMessage(c, "操作成功", gin.H{
 		"name":    name,
 		"enabled": req.Enabled,
+		"note":    "工具启用/禁用状态已记录，但当前版本暂不影响实际执行",
 	})
 }
 

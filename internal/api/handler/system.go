@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"ai-ops/internal/repository"
@@ -71,19 +73,45 @@ func (h *SystemHandler) GetSystemInfo(c *gin.Context) {
 // GetConfig 获取系统配置
 // GET /api/system/config
 func (h *SystemHandler) GetConfig(c *gin.Context) {
-	// 返回非敏感配置
-	// TODO: 从配置管理器获取
-	Success(c, gin.H{
-		"server": gin.H{
-			"mode": "debug",
-		},
-		"llm": gin.H{
-			"model": "qwen2.5:14b",
-		},
-		"agent": gin.H{
-			"max_loops": 10,
-		},
-	})
+	// 从数据库获取配置
+	configs, err := h.configRepo.GetAll()
+	if err != nil {
+		InternalError(c, "获取配置失败: "+err.Error())
+		return
+	}
+
+	// 构建配置对象
+	result := make(map[string]interface{})
+	for key, value := range configs {
+		parts := strings.Split(key, ".")
+		if len(parts) >= 2 {
+			section := parts[0]
+			field := strings.Join(parts[1:], ".")
+			if result[section] == nil {
+				result[section] = make(map[string]interface{})
+			}
+			result[section].(map[string]interface{})[field] = value
+		} else {
+			result[key] = value
+		}
+	}
+
+	// 如果没有配置，返回默认值
+	if len(result) == 0 {
+		result = map[string]interface{}{
+			"server": map[string]interface{}{
+				"mode": "debug",
+			},
+			"llm": map[string]interface{}{
+				"model": "qwen2.5:14b",
+			},
+			"agent": map[string]interface{}{
+				"max_loops": "10",
+			},
+		}
+	}
+
+	Success(c, result)
 }
 
 // UpdateConfig 更新系统配置
@@ -95,8 +123,28 @@ func (h *SystemHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 
-	// TODO: 实现配置更新逻辑
-	SuccessWithMessage(c, "配置更新功能开发中", nil)
+	// 扁平化配置并保存
+	for key, value := range req {
+		valueStr := fmt.Sprintf("%v", value)
+		
+		// 如果是嵌套对象，需要展开
+		if nested, ok := value.(map[string]interface{}); ok {
+			for nestedKey, nestedValue := range nested {
+				configKey := fmt.Sprintf("%s.%s", key, nestedKey)
+				if err := h.configRepo.Set(configKey, fmt.Sprintf("%v", nestedValue)); err != nil {
+					InternalError(c, "保存配置失败: "+err.Error())
+					return
+				}
+			}
+		} else {
+			if err := h.configRepo.Set(key, valueStr); err != nil {
+				InternalError(c, "保存配置失败: "+err.Error())
+				return
+			}
+		}
+	}
+
+	SuccessWithMessage(c, "配置更新成功", nil)
 }
 
 // GetCommandPolicy 获取命令白名单策略
