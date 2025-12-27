@@ -22,9 +22,14 @@ export const useScriptStore = defineStore('script', () => {
   async function loadScripts(params?: { page?: number; pageSize?: number; keyword?: string }) {
     loading.value = true
     try {
-      const data = await getScripts(params)
-      scripts.value = data.list
-      total.value = data.total
+      const data: any = await getScripts(params)
+      if (Array.isArray(data)) {
+        scripts.value = data
+        total.value = data.length
+      } else {
+        scripts.value = Array.isArray(data?.list) ? data.list : []
+        total.value = typeof data?.total === 'number' ? data.total : scripts.value.length
+      }
     } catch (error) {
       console.error('加载脚本列表失败:', error)
     } finally {
@@ -47,6 +52,9 @@ export const useScriptStore = defineStore('script', () => {
   async function addScript(data: Omit<Script, 'id' | 'createdAt' | 'updatedAt'>) {
     try {
       const newScript = await createScript(data)
+      if (!Array.isArray(scripts.value)) {
+        scripts.value = []
+      }
       scripts.value.unshift(newScript)
       total.value++
       return newScript
@@ -101,6 +109,9 @@ export const useScriptStore = defineStore('script', () => {
   async function upload(file: File) {
     try {
       const newScript = await uploadScript(file)
+      if (!Array.isArray(scripts.value)) {
+        scripts.value = []
+      }
       scripts.value.unshift(newScript)
       total.value++
       return newScript
