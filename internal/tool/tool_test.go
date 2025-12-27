@@ -317,6 +317,128 @@ func TestGenerateJSONSchema(t *testing.T) {
 	}
 }
 
+// TestExecute_DisabledTool 测试禁用工具不能执行
+func TestExecute_DisabledTool(t *testing.T) {
+	registry := NewRegistry()
+
+	tool := &MockTool{
+		name: "test_tool",
+		executeFunc: func(ctx *Context, params map[string]interface{}) (*Result, error) {
+			return NewResult("success", "执行成功"), nil
+		},
+	}
+	registry.RegisterBuiltin(tool)
+
+	// 设置工具为禁用状态
+	registry.SetEnableChecker(func(name string) bool {
+		return name != "test_tool"
+	})
+
+	// 尝试执行禁用的工具，应该返回错误
+	_, err := registry.Execute(nil, "test_tool", nil)
+	if err == nil {
+		t.Error("执行禁用的工具应该返回错误")
+	}
+	if err.Error() != "工具已禁用: test_tool" {
+		t.Errorf("错误信息期望 '工具已禁用: test_tool', 实际 '%s'", err.Error())
+	}
+}
+
+// TestGenerateJSONSchema_DisabledTool 测试禁用的工具不会出现在Schema中
+func TestGenerateJSONSchema_DisabledTool(t *testing.T) {
+	registry := NewRegistry()
+
+	tools := []*MockTool{
+		{name: "tool1", description: "工具1"},
+		{name: "tool2", description: "工具2"},
+		{name: "tool3", description: "工具3"},
+	}
+
+	for _, tool := range tools {
+		registry.RegisterBuiltin(tool)
+	}
+
+	// 初始状态：所有工具都启用
+	schemas := registry.GenerateJSONSchema()
+	if len(schemas) != 3 {
+		t.Fatalf("初始Schema数量期望 3, 实际 %d", len(schemas))
+	}
+
+	// 禁用 tool2
+	registry.SetEnableChecker(func(name string) bool {
+		return name != "tool2"
+	})
+
+	schemas = registry.GenerateJSONSchema()
+	if len(schemas) != 2 {
+		t.Fatalf("禁用后Schema数量期望 2, 实际 %d", len(schemas))
+	}
+
+	// 验证只有 tool1 和 tool3 在 Schema 中
+	names := make(map[string]bool)
+	for _, schema := range schemas {
+		fn := schema["function"].(map[string]interface{})
+		names[fn["name"].(string)] = true
+	}
+
+	if !names["tool1"] || !names["tool3"] {
+		t.Error("Schema 应该包含 tool1 和 tool3")
+	}
+	if names["tool2"] {
+		t.Error("Schema 不应该包含禁用的 tool2")
+	}
+}
+
+// TestGeneratePrompt_DisabledTool 测试禁用的工具不会出现在Prompt中
+func TestGeneratePrompt_DisabledTool(t *testing.T) {
+	registry := NewRegistry()
+
+	tool1 := &MockTool{name: "tool1", description: "工具1"}
+	tool2 := &MockTool{name: "tool2", description: "工具2"}
+
+	registry.RegisterBuiltin(tool1)
+	registry.RegisterBuiltin(tool2)
+
+	// 禁用 tool2
+	registry.SetEnableChecker(func(name string) bool {
+		return name != "tool2"
+	})
+
+	prompt := registry.GeneratePrompt()
+
+	if !strings.Contains(prompt, "tool1") {
+		t.Error("Prompt 应该包含 tool1")
+	}
+	if strings.Contains(prompt, "tool2") {
+		t.Error("Prompt 不应该包含禁用的 tool2")
+	}
+}
+
+// TestIsEnabled 测试IsEnabled方法
+func TestIsEnabled(t *testing.T) {
+	registry := NewRegistry()
+
+	tool := &MockTool{name: "test_tool"}
+	registry.RegisterBuiltin(tool)
+
+	// 默认所有工具都启用
+	if !registry.IsEnabled("test_tool") {
+		t.Error("默认情况下工具应该启用")
+	}
+
+	// 设置自定义检查器
+	registry.SetEnableChecker(func(name string) bool {
+		return name == "test_tool"
+	})
+
+	if !registry.IsEnabled("test_tool") {
+		t.Error("test_tool 应该启用")
+	}
+	if registry.IsEnabled("other_tool") {
+		t.Error("other_tool 应该禁用")
+	}
+}
+
 func TestGetStringParam(t *testing.T) {
 	params := map[string]interface{}{
 		"host": "192.168.1.1",
