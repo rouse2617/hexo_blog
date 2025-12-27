@@ -44,8 +44,58 @@ export const useHostStore = defineStore('host', () => {
     try {
       const data = await getAllHosts()
       allHosts.value = (data || []).map(normalizeHost)
+      // 加载后立即检查状态
+      await refreshAllHostStatus()
     } catch (error) {
       console.error('加载所有主机失败:', error)
+    }
+  }
+
+  // 刷新所有主机状态
+  async function refreshAllHostStatus() {
+    if (allHosts.value.length === 0) {
+      return
+    }
+
+    // 批量测试所有主机状态
+    const promises = allHosts.value.map(async (host) => {
+      try {
+        const result = await testHostConnection(host.id || host.name)
+        host.status = result.success ? 'online' : 'offline'
+        // 同时更新hosts列表中的状态
+        const index = hosts.value.findIndex(h => h.id === host.id)
+        if (index !== -1) {
+          hosts.value[index].status = host.status
+        }
+      } catch (error) {
+        host.status = 'offline'
+        const index = hosts.value.findIndex(h => h.id === host.id)
+        if (index !== -1) {
+          hosts.value[index].status = 'offline'
+        }
+      }
+    })
+
+    await Promise.allSettled(promises)
+  }
+
+  // 启动状态自动刷新
+  let statusRefreshTimer: number | null = null
+
+  function startStatusAutoRefresh() {
+    // 立即执行一次
+    refreshAllHostStatus()
+
+    // 每1分钟刷新一次
+    statusRefreshTimer = window.setInterval(() => {
+      refreshAllHostStatus()
+    }, 60000) // 60秒 = 60000毫秒
+  }
+
+  function stopStatusAutoRefresh() {
+    if (statusRefreshTimer !== null) {
+      clearInterval(statusRefreshTimer)
+      statusRefreshTimer = null
     }
   }
 
@@ -141,6 +191,9 @@ export const useHostStore = defineStore('host', () => {
     editHost,
     removeHost,
     testConnection,
-    batchImport
+    batchImport,
+    refreshAllHostStatus,
+    startStatusAutoRefresh,
+    stopStatusAutoRefresh
   }
 })

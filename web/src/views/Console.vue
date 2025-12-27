@@ -5,40 +5,53 @@
       <p class="page-desc">选择多个主机节点，执行批量操作，查看执行结果，使用AI智能分析</p>
     </div>
 
-    <div class="console-layout">
-      <!-- 左侧：主机选择 -->
-      <div class="left-panel">
-        <HostSelector />
-      </div>
-
-      <!-- 右侧：操作和结果区域 -->
-      <div class="right-panel">
-        <!-- 操作区域 -->
-        <div class="operation-section">
-          <OperationPanel />
+    <ResizablePanels
+      :initial-left-width="400"
+      :min-left-width="300"
+      :max-left-width="800"
+      height="100%"
+    >
+      <template #left>
+        <div class="left-panel-content">
+          <HostSelector />
         </div>
+      </template>
+      <template #right>
+        <ResizableVerticalPanels
+          :initial-top-height="350"
+          :min-top-height="250"
+          :max-top-height="500"
+          height="100%"
+        >
+          <template #top>
+            <div class="operation-section">
+              <OperationPanel />
+            </div>
+          </template>
+          <template #bottom>
+            <!-- 结果区域 -->
+            <div v-if="hasResults" class="result-section">
+              <el-tabs v-model="resultTab">
+                <el-tab-pane label="结果概览" name="overview">
+                  <ResultOverview @view-detail="handleViewDetail" />
+                </el-tab-pane>
+                <el-tab-pane label="详细结果" name="detail">
+                  <ResultDetail @retry="handleRetry" />
+                </el-tab-pane>
+                <el-tab-pane label="AI分析" name="analysis">
+                  <AIAnalysis />
+                </el-tab-pane>
+              </el-tabs>
+            </div>
 
-        <!-- 结果区域 -->
-        <div v-if="hasResults" class="result-section">
-          <el-tabs v-model="resultTab">
-            <el-tab-pane label="结果概览" name="overview">
-              <ResultOverview @view-detail="handleViewDetail" />
-            </el-tab-pane>
-            <el-tab-pane label="详细结果" name="detail">
-              <ResultDetail @retry="handleRetry" />
-            </el-tab-pane>
-            <el-tab-pane label="AI分析" name="analysis">
-              <AIAnalysis />
-            </el-tab-pane>
-          </el-tabs>
-        </div>
-
-        <!-- 空状态 -->
-        <div v-else class="empty-state">
-          <el-empty description="请选择主机并执行操作，结果将显示在这里" />
-        </div>
-      </div>
-    </div>
+            <!-- 空状态 -->
+            <div v-else class="empty-state">
+              <el-empty description="请选择主机并执行操作，结果将显示在这里" />
+            </div>
+          </template>
+        </ResizableVerticalPanels>
+      </template>
+    </ResizablePanels>
   </div>
 </template>
 
@@ -50,6 +63,8 @@ import OperationPanel from '@/components/console/OperationPanel.vue'
 import ResultOverview from '@/components/console/ResultOverview.vue'
 import ResultDetail from '@/components/console/ResultDetail.vue'
 import AIAnalysis from '@/components/console/AIAnalysis.vue'
+import ResizablePanels from '@/components/common/ResizablePanels.vue'
+import ResizableVerticalPanels from '@/components/common/ResizableVerticalPanels.vue'
 import { useConsoleStore } from '@/stores/console'
 import type { BatchExecuteResult } from '@/api/operations'
 
@@ -109,27 +124,11 @@ const handleRetry = async (result: BatchExecuteResult) => {
   font-size: 14px;
 }
 
-.console-layout {
-  flex: 1;
-  display: flex;
-  gap: 20px;
-  overflow: hidden;
-}
-
-.left-panel {
-  width: 30%;
-  min-width: 300px;
+.left-panel-content {
+  height: 100%;
   border: 1px solid var(--el-border-color);
   border-radius: 4px;
   background: var(--el-bg-color);
-  overflow: hidden;
-}
-
-.right-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
   overflow: hidden;
 }
 

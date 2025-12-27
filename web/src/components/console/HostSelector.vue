@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElTable } from 'element-plus'
 import { Monitor, Search } from '@element-plus/icons-vue'
 import type { Host } from '@/api/host'
@@ -229,6 +229,9 @@ const getStatusText = (status?: string) => {
 // 加载主机列表
 onMounted(async () => {
   await hostStore.loadAllHosts()
+  // 启动状态自动刷新
+  hostStore.startStatusAutoRefresh()
+  
   // 初始化时同步已选中的主机到表格
   if (consoleStore.selectedHosts.length > 0 && tableRef.value) {
     nextTick(() => {
@@ -240,6 +243,11 @@ onMounted(async () => {
       })
     })
   }
+})
+
+// 组件卸载时停止自动刷新
+onUnmounted(() => {
+  hostStore.stopStatusAutoRefresh()
 })
 </script>
 
