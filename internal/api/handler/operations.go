@@ -195,10 +195,7 @@ func (h *OperationsHandler) BatchExecute(c *gin.Context) {
 		}
 	}
 
-	Success(c, gin.H{
-		"success": true,
-		"data":    results,
-	})
+	Success(c, results)
 }
 
 // getElapsedFromItem 从结果项中获取执行时间

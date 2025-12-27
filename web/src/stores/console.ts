@@ -61,8 +61,8 @@ export const useConsoleStore = defineStore('console', () => {
         params
       })
 
-      executionResults.value = response.data || []
-      return response.data || []
+      executionResults.value = response || []
+      return response || []
     } catch (error) {
       console.error('批量执行失败:', error)
       throw error

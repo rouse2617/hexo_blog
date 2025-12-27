@@ -12,19 +12,18 @@ import (
 	"ai-ops/internal/model"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
-
 
 // MockAnalysisRepository 模拟分析仓库
 type MockAnalysisRepository struct {
-	CreateFunc    func(analysis *model.Analysis) error
-	GetByIDFunc   func(id string) (*model.Analysis, error)
-	ListFunc      func(sessionID string, limit int) ([]*model.Analysis, error)
-	DeleteFunc    func(id string) error
-	analyses      map[string]*model.Analysis
+	CreateFunc  func(analysis *model.Analysis) error
+	GetByIDFunc func(id string) (*model.Analysis, error)
+	ListFunc    func(sessionID string, limit int) ([]*model.Analysis, error)
+	DeleteFunc  func(id string) error
+	analyses    map[string]*model.Analysis
 }
 
 func NewMockAnalysisRepository() *MockAnalysisRepository {
@@ -107,8 +106,8 @@ func TestAnalysisHandler_Analyze_Success(t *testing.T) {
 	// 创建mock HTTP server来模拟LLM响应
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{
-			"id":      "test-id",
-			"model":   "test",
+			"id":    "test-id",
+			"model": "test",
 			"choices": []map[string]interface{}{
 				{
 					"message": map[string]interface{}{
@@ -177,7 +176,7 @@ func TestAnalysisHandler_Analyze_Success(t *testing.T) {
 func TestAnalysisHandler_Analyze_EmptyResults(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer mockServer.Close()
-	
+
 	_, router, _ := setupAnalysisHandlerWithMockLLM(mockServer)
 
 	reqBody := AnalyzeRequest{
@@ -203,7 +202,7 @@ func TestAnalysisHandler_Analyze_EmptyResults(t *testing.T) {
 func TestAnalysisHandler_Analyze_InvalidRequest(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer mockServer.Close()
-	
+
 	_, router, _ := setupAnalysisHandlerWithMockLLM(mockServer)
 
 	// 缺少必需字段
@@ -217,7 +216,7 @@ func TestAnalysisHandler_Analyze_InvalidRequest(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code) // 所有响应都返回200，错误码在响应体中
-	
+
 	var resp Response
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
@@ -261,7 +260,7 @@ func TestAnalysisHandler_Analyze_LLMError(t *testing.T) {
 func TestAnalysisHandler_GetHistory_Success(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer mockServer.Close()
-	
+
 	_, router, mockRepo := setupAnalysisHandlerWithMockLLM(mockServer)
 
 	// 创建一些测试数据
@@ -300,7 +299,7 @@ func TestAnalysisHandler_GetHistory_Success(t *testing.T) {
 func TestAnalysisHandler_GetAnalysis_Success(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer mockServer.Close()
-	
+
 	_, router, mockRepo := setupAnalysisHandlerWithMockLLM(mockServer)
 
 	analysis := &model.Analysis{
@@ -327,7 +326,7 @@ func TestAnalysisHandler_GetAnalysis_Success(t *testing.T) {
 func TestAnalysisHandler_GetAnalysis_NotFound(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer mockServer.Close()
-	
+
 	_, router, _ := setupAnalysisHandlerWithMockLLM(mockServer)
 
 	req, _ := http.NewRequest("GET", "/api/analysis/non-existent-id", nil)
@@ -346,7 +345,7 @@ func TestAnalysisHandler_GetAnalysis_NotFound(t *testing.T) {
 func TestAnalysisHandler_DeleteAnalysis_Success(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer mockServer.Close()
-	
+
 	_, router, mockRepo := setupAnalysisHandlerWithMockLLM(mockServer)
 
 	analysis := &model.Analysis{
@@ -373,4 +372,3 @@ func TestAnalysisHandler_DeleteAnalysis_Success(t *testing.T) {
 	_, err = mockRepo.GetByID("test-id-1")
 	assert.Error(t, err)
 }
-

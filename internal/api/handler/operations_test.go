@@ -85,12 +85,8 @@ func TestOperationsHandler_BatchExecute_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, CodeSuccess, resp.Code)
 
-	// 验证返回的数据
-	data, ok := resp.Data.(map[string]interface{})
-	require.True(t, ok)
-	assert.Contains(t, data, "data")
-
-	results, ok := data["data"].([]interface{})
+	// 验证返回的数据（现在直接返回results数组）
+	results, ok := resp.Data.([]interface{})
 	require.True(t, ok)
 	assert.Len(t, results, 2)
 }
@@ -244,10 +240,8 @@ func TestOperationsHandler_BatchExecute_ToolExecutionError(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, CodeSuccess, resp.Code)
 
-	// 验证所有主机都返回错误状态
-	data, ok := resp.Data.(map[string]interface{})
-	require.True(t, ok)
-	results, ok := data["data"].([]interface{})
+	// 验证所有主机都返回错误状态（现在直接返回results数组）
+	results, ok := resp.Data.([]interface{})
 	require.True(t, ok)
 	assert.Len(t, results, 2)
 

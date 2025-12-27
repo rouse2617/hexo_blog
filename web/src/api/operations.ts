@@ -14,10 +14,7 @@ export interface BatchExecuteResult {
   elapsed: string
 }
 
-export interface BatchExecuteResponse {
-  success: boolean
-  data: BatchExecuteResult[]
-}
+export type BatchExecuteResponse = BatchExecuteResult[]
 
 // 批量执行操作
 export function batchExecute(data: BatchExecuteRequest) {
