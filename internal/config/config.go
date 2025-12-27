@@ -184,6 +184,8 @@ func (c *Config) loadFromEnv() {
 	// LLM API Key 优先从环境变量读取
 	if apiKey := os.Getenv("LLM_API_KEY"); apiKey != "" {
 		c.LLM.APIKey = apiKey
+	} else if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		c.LLM.APIKey = apiKey
 	}
 
 	// 数据库 DSN 可从环境变量覆盖
