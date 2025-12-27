@@ -3,8 +3,8 @@ package handler
 import (
 	"time"
 
-	"ai-ops/internal/tool"
 	"ai-ops/internal/ssh"
+	"ai-ops/internal/tool"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,17 +26,17 @@ func NewOperationsHandler(registry *tool.Registry, sshPool *ssh.Pool) *Operation
 // BatchExecuteRequest 批量执行请求
 type BatchExecuteRequest struct {
 	Operation string                 `json:"operation" binding:"required"` // query_log | run_command | check_cpu | check_memory
-	Hosts     []string               `json:"hosts" binding:"required"`    // 目标节点列表
-	Params    map[string]interface{} `json:"params"`                      // 操作参数
+	Hosts     []string               `json:"hosts" binding:"required"`     // 目标节点列表
+	Params    map[string]interface{} `json:"params"`                       // 操作参数
 }
 
 // BatchExecuteResult 批量执行结果
 type BatchExecuteResult struct {
-	Host    string        `json:"host"`
-	Status  string        `json:"status"` // success | error
-	Result  interface{}   `json:"result,omitempty"`
-	Error   string        `json:"error,omitempty"`
-	Elapsed string        `json:"elapsed"`
+	Host    string      `json:"host"`
+	Status  string      `json:"status"` // success | error
+	Result  interface{} `json:"result,omitempty"`
+	Error   string      `json:"error,omitempty"`
+	Elapsed string      `json:"elapsed"`
 }
 
 // BatchExecute 批量执行操作
@@ -50,11 +50,11 @@ func (h *OperationsHandler) BatchExecute(c *gin.Context) {
 
 	// 验证操作类型
 	supportedOperations := map[string]bool{
-		"query_log":   true,
-		"run_command": true,
-		"check_cpu":   true,
-		"check_memory": true,
-		"check_disk":  true,
+		"query_log":     true,
+		"run_command":   true,
+		"check_cpu":     true,
+		"check_memory":  true,
+		"check_disk":    true,
 		"check_process": true,
 	}
 	if !supportedOperations[req.Operation] {
@@ -208,4 +208,3 @@ func getElapsedFromItem(item map[string]interface{}) string {
 	}
 	return ""
 }
-

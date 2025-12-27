@@ -41,3 +41,4 @@ export function deleteAnalysis(id: string) {
   return request.delete(`/analysis/${id}`)
 }
 
+

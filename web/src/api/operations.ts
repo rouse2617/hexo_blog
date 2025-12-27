@@ -24,3 +24,4 @@ export function batchExecute(data: BatchExecuteRequest) {
   return request.post<BatchExecuteResponse>('/operations/batch-execute', data)
 }
 
+
