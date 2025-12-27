@@ -42,6 +42,36 @@ func (t *ListHostsTool) Parameters() []tool.Parameter {
 func (t *ListHostsTool) Execute(ctx *tool.Context, params map[string]interface{}) (*tool.Result, error) {
 	group := tool.GetStringParam(params, "group", "")
 
+	// 优先使用上下文中的 SSH Pool（与 Host API 同源）
+	if ctx != nil && ctx.SSH != nil {
+		poolHosts := ctx.SSH.ListHosts()
+		hosts := make([]HostBasicInfo, 0, len(poolHosts))
+		for _, h := range poolHosts {
+			if group != "" && h.Group != group {
+				continue
+			}
+			hosts = append(hosts, HostBasicInfo{
+				Name:   h.Name,
+				Host:   h.Host,
+				Port:   h.Port,
+				User:   h.User,
+				Group:  h.Group,
+				Status: "unknown",
+			})
+		}
+		if len(hosts) == 0 {
+			if group != "" {
+				return tool.NewResult([]HostBasicInfo{}, "未找到该分组的主机"), nil
+			}
+			return tool.NewResult([]HostBasicInfo{}, "暂无可用主机"), nil
+		}
+		message := "主机列表"
+		if group != "" {
+			message = "分组 " + group + " 的主机列表"
+		}
+		return tool.NewResult(hosts, message), nil
+	}
+
 	if t.GetHostsFunc == nil {
 		return tool.NewErrorResult("主机列表功能未配置"), nil
 	}
