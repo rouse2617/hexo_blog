@@ -1,20 +1,29 @@
 package handler
 
 import (
+	"ai-ops/internal/model"
+	"ai-ops/internal/repository"
 	"ai-ops/internal/ssh"
-	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // HostHandler 主机处理器
 type HostHandler struct {
-	sshPool *ssh.Pool
+	sshPool   *ssh.Pool
+	hostRepo  repository.HostRepository
+	groupRepo repository.GroupRepository
 }
 
 // NewHostHandler 创建主机处理器
-func NewHostHandler(sshPool *ssh.Pool) *HostHandler {
-	return &HostHandler{sshPool: sshPool}
+func NewHostHandler(sshPool *ssh.Pool, hostRepo repository.HostRepository, groupRepo repository.GroupRepository) *HostHandler {
+	return &HostHandler{
+		sshPool:   sshPool,
+		hostRepo:  hostRepo,
+		groupRepo: groupRepo,
+	}
 }
 
 // HostInfo 主机信息
@@ -82,30 +91,47 @@ func (h *HostHandler) ListHosts(c *gin.Context) {
 	group := c.Query("group")
 	keyword := c.Query("keyword")
 
-	// 从 SSH Pool 获取主机列表
-	poolHosts := h.sshPool.ListHosts()
-	hosts := make([]HostResponse, 0, len(poolHosts))
+	// 从数据库获取主机列表
+	filter := repository.HostFilter{
+		Group:   group,
+		Keyword: keyword,
+	}
+	dbHosts, err := h.hostRepo.List(filter)
+	if err != nil {
+		InternalError(c, "获取主机列表失败: "+err.Error())
+		return
+	}
 
-	for _, info := range poolHosts {
-		// 过滤逻辑
-		if group != "" && info.Group != group {
-			continue
-		}
-		if keyword != "" && !containsKeyword(info, keyword) {
-			continue
-		}
+	// 同步到SSH Pool
+	for _, dbHost := range dbHosts {
+		h.sshPool.AddHost(ssh.HostInfo{
+			Name:       dbHost.Name,
+			Host:       dbHost.IP,
+			Port:       dbHost.Port,
+			User:       dbHost.User,
+			Group:      dbHost.Group,
+			Tags:       dbHost.Tags,
+			AuthType:   dbHost.AuthType,
+			Password:   dbHost.Password,
+			KeyPath:    dbHost.KeyPath,
+			KeyContent: dbHost.KeyContent,
+		})
+	}
 
+	// 转换为响应格式
+	hosts := make([]HostResponse, 0, len(dbHosts))
+	for _, dbHost := range dbHosts {
 		hosts = append(hosts, HostResponse{
-			ID:       info.Name,
-			Name:     info.Name,
-			Host:     info.Host,
-			Port:     info.Port,
-			User:     info.User,
-			Username: info.User,
-			Group:    info.Group,
-			Tags:     info.Tags,
-			AuthType: info.AuthType,
-			Status:   "unknown",
+			ID:       dbHost.ID,
+			Name:     dbHost.Name,
+			Host:     dbHost.IP,
+			Port:     dbHost.Port,
+			User:     dbHost.User,
+			Username: dbHost.User,
+			Group:    dbHost.Group,
+			Tags:     dbHost.Tags,
+			AuthType: dbHost.AuthType,
+			Status:   dbHost.Status,
 		})
 	}
 
@@ -118,32 +144,48 @@ func (h *HostHandler) ListHosts(c *gin.Context) {
 // GetAllHosts 获取所有主机（不分页，用于选择器）
 // GET /api/hosts/all
 func (h *HostHandler) GetAllHosts(c *gin.Context) {
-	poolHosts := h.sshPool.ListHosts()
-	hosts := make([]HostResponse, 0, len(poolHosts))
+	// 从数据库获取所有主机
+	dbHosts, err := h.hostRepo.List(repository.HostFilter{})
+	if err != nil {
+		InternalError(c, "获取主机列表失败: "+err.Error())
+		return
+	}
 
-	for _, info := range poolHosts {
+	// 同步到SSH Pool
+	for _, dbHost := range dbHosts {
+		h.sshPool.AddHost(ssh.HostInfo{
+			Name:       dbHost.Name,
+			Host:       dbHost.IP,
+			Port:       dbHost.Port,
+			User:       dbHost.User,
+			Group:      dbHost.Group,
+			Tags:       dbHost.Tags,
+			AuthType:   dbHost.AuthType,
+			Password:   dbHost.Password,
+			KeyPath:    dbHost.KeyPath,
+			KeyContent: dbHost.KeyContent,
+		})
+	}
+
+	// 转换为响应格式
+	hosts := make([]HostResponse, 0, len(dbHosts))
+	for _, dbHost := range dbHosts {
 		hosts = append(hosts, HostResponse{
-			ID:       info.Name,
-			Name:     info.Name,
-			Host:     info.Host,
-			Port:     info.Port,
-			User:     info.User,
-			Username: info.User,
-			Group:    info.Group,
-			Tags:     info.Tags,
-			Status:   "unknown",
+			ID:       dbHost.ID,
+			Name:     dbHost.Name,
+			Host:     dbHost.IP,
+			Port:     dbHost.Port,
+			User:     dbHost.User,
+			Username: dbHost.User,
+			Group:    dbHost.Group,
+			Tags:     dbHost.Tags,
+			Status:   dbHost.Status,
 		})
 	}
 
 	Success(c, hosts)
 }
 
-// containsKeyword 检查主机信息是否包含关键字
-func containsKeyword(info ssh.HostInfo, keyword string) bool {
-	return strings.Contains(info.Name, keyword) ||
-		strings.Contains(info.Host, keyword) ||
-		strings.Contains(info.User, keyword)
-}
 
 // CreateHost 添加主机
 // POST /api/hosts
@@ -162,6 +204,40 @@ func (h *HostHandler) CreateHost(c *gin.Context) {
 	user := req.getUser()
 	authType := req.getAuthType()
 
+	// 检查主机名是否已存在
+	if _, err := h.hostRepo.GetByName(req.Name); err == nil {
+		ParamError(c, "主机名已存在: "+req.Name)
+		return
+	}
+
+	// 生成ID（使用name作为ID，保持与SSH Pool一致）
+	hostID := req.Name
+	if req.ID != "" {
+		hostID = req.ID
+	}
+
+	// 保存到数据库
+	hostModel := &model.Host{
+		ID:         hostID,
+		Name:       req.Name,
+		IP:         req.Host,
+		Port:       req.Port,
+		User:       user,
+		Group:      req.Group,
+		Tags:       req.Tags,
+		AuthType:   authType,
+		Password:   req.Password,
+		KeyPath:    req.KeyPath,
+		KeyContent: req.PrivateKey,
+		Status:     model.HostStatusUnknown,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+	if err := h.hostRepo.Create(hostModel); err != nil {
+		InternalError(c, "保存主机失败: "+err.Error())
+		return
+	}
+
 	// 添加到 SSH Pool
 	h.sshPool.AddHost(ssh.HostInfo{
 		Name:       req.Name,
@@ -176,11 +252,9 @@ func (h *HostHandler) CreateHost(c *gin.Context) {
 		KeyContent: req.PrivateKey,
 	})
 
-	// TODO: 保存到数据库
-
 	// 返回完整的主机信息
 	Success(c, HostResponse{
-		ID:       req.Name,
+		ID:       hostID,
 		Name:     req.Name,
 		Host:     req.Host,
 		Port:     req.Port,
@@ -189,7 +263,7 @@ func (h *HostHandler) CreateHost(c *gin.Context) {
 		Group:    req.Group,
 		Tags:     req.Tags,
 		AuthType: authType,
-		Status:   "unknown",
+		Status:   model.HostStatusUnknown,
 	})
 }
 
@@ -202,27 +276,52 @@ func (h *HostHandler) UpdateHost(c *gin.Context) {
 		return
 	}
 
+	// 获取现有主机
+	existingHost, err := h.hostRepo.GetByID(id)
+	if err != nil {
+		NotFound(c, "主机不存在")
+		return
+	}
+
 	var req HostInfo
 	if err := c.ShouldBindJSON(&req); err != nil {
 		ParamError(c, "参数错误: "+err.Error())
 		return
 	}
 
-	// 先移除旧的
+	user := req.getUser()
+	authType := req.getAuthType()
+
+	// 更新数据库
+	existingHost.IP = req.Host
+	existingHost.Port = req.Port
+	existingHost.User = user
+	existingHost.Group = req.Group
+	existingHost.Tags = req.Tags
+	existingHost.AuthType = authType
+	existingHost.Password = req.Password
+	existingHost.KeyPath = req.KeyPath
+	existingHost.KeyContent = req.PrivateKey
+	existingHost.UpdatedAt = time.Now()
+	if err := h.hostRepo.Update(existingHost); err != nil {
+		InternalError(c, "更新主机失败: "+err.Error())
+		return
+	}
+
+	// 更新 SSH Pool
 	h.sshPool.RemoveHost(id)
-
-	// 添加新的
 	h.sshPool.AddHost(ssh.HostInfo{
-		Name:     req.Name,
-		Host:     req.Host,
-		Port:     req.Port,
-		User:     req.User,
-		AuthType: req.AuthType,
-		Password: req.Password,
-		KeyPath:  req.KeyPath,
+		Name:       existingHost.Name,
+		Host:       req.Host,
+		Port:       req.Port,
+		User:       user,
+		Group:      req.Group,
+		Tags:       req.Tags,
+		AuthType:   authType,
+		Password:   req.Password,
+		KeyPath:    req.KeyPath,
+		KeyContent: req.PrivateKey,
 	})
-
-	// TODO: 更新数据库
 
 	SuccessWithMessage(c, "更新成功", nil)
 }
@@ -236,9 +335,14 @@ func (h *HostHandler) DeleteHost(c *gin.Context) {
 		return
 	}
 
-	h.sshPool.RemoveHost(id)
+	// 从数据库删除
+	if err := h.hostRepo.Delete(id); err != nil {
+		InternalError(c, "删除主机失败: "+err.Error())
+		return
+	}
 
-	// TODO: 从数据库删除
+	// 从 SSH Pool 删除
+	h.sshPool.RemoveHost(id)
 
 	SuccessWithMessage(c, "删除成功", nil)
 }
@@ -252,23 +356,38 @@ func (h *HostHandler) GetHost(c *gin.Context) {
 		return
 	}
 
-	info, ok := h.sshPool.GetHost(id)
-	if !ok {
+	// 从数据库获取
+	dbHost, err := h.hostRepo.GetByID(id)
+	if err != nil {
 		NotFound(c, "主机不存在")
 		return
 	}
 
+	// 同步到SSH Pool
+	h.sshPool.AddHost(ssh.HostInfo{
+		Name:       dbHost.Name,
+		Host:       dbHost.IP,
+		Port:       dbHost.Port,
+		User:       dbHost.User,
+		Group:      dbHost.Group,
+		Tags:       dbHost.Tags,
+		AuthType:   dbHost.AuthType,
+		Password:   dbHost.Password,
+		KeyPath:    dbHost.KeyPath,
+		KeyContent: dbHost.KeyContent,
+	})
+
 	Success(c, HostResponse{
-		ID:       info.Name,
-		Name:     info.Name,
-		Host:     info.Host,
-		Port:     info.Port,
-		User:     info.User,
-		Username: info.User,
-		Group:    info.Group,
-		Tags:     info.Tags,
-		AuthType: info.AuthType,
-		Status:   "unknown",
+		ID:       dbHost.ID,
+		Name:     dbHost.Name,
+		Host:     dbHost.IP,
+		Port:     dbHost.Port,
+		User:     dbHost.User,
+		Username: dbHost.User,
+		Group:    dbHost.Group,
+		Tags:     dbHost.Tags,
+		AuthType: dbHost.AuthType,
+		Status:   dbHost.Status,
 	})
 }
 
@@ -283,11 +402,11 @@ func (h *HostHandler) BatchDeleteHosts(c *gin.Context) {
 		return
 	}
 
+	// 从数据库批量删除
 	for _, id := range req.IDs {
+		h.hostRepo.Delete(id)
 		h.sshPool.RemoveHost(id)
 	}
-
-	// TODO: 从数据库删除
 
 	SuccessWithMessage(c, "删除成功", gin.H{
 		"deleted": len(req.IDs),
@@ -337,9 +456,14 @@ func (h *HostHandler) ImportHosts(c *gin.Context) {
 // GetGroups 获取分组列表
 // GET /api/groups
 func (h *HostHandler) GetGroups(c *gin.Context) {
-	// TODO: 从数据库获取分组
+	groups, err := h.groupRepo.List()
+	if err != nil {
+		InternalError(c, "获取分组列表失败: "+err.Error())
+		return
+	}
+
 	Success(c, gin.H{
-		"groups": []interface{}{},
+		"groups": groups,
 	})
 }
 
@@ -356,8 +480,26 @@ func (h *HostHandler) CreateGroup(c *gin.Context) {
 		return
 	}
 
-	// TODO: 保存到数据库
+	// 检查分组名是否已存在
+	if _, err := h.groupRepo.GetByName(req.Name); err == nil {
+		ParamError(c, "分组名已存在: "+req.Name)
+		return
+	}
+
+	// 保存到数据库
+	group := &model.Group{
+		ID:          uuid.New().String(),
+		Name:        req.Name,
+		Description: req.Description,
+		CreatedAt:   time.Now(),
+	}
+	if err := h.groupRepo.Create(group); err != nil {
+		InternalError(c, "创建分组失败: "+err.Error())
+		return
+	}
+
 	SuccessWithMessage(c, "创建成功", gin.H{
+		"id":   group.ID,
 		"name": req.Name,
 	})
 }
@@ -371,6 +513,11 @@ func (h *HostHandler) DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	// TODO: 从数据库删除
+	// 从数据库删除
+	if err := h.groupRepo.DeleteByName(name); err != nil {
+		InternalError(c, "删除分组失败: "+err.Error())
+		return
+	}
+
 	SuccessWithMessage(c, "删除成功", nil)
 }

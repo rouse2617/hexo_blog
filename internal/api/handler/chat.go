@@ -6,18 +6,23 @@ import (
 	"time"
 
 	"ai-ops/internal/agent"
+	"ai-ops/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
 // ChatHandler 对话处理器
 type ChatHandler struct {
-	agent *agent.Agent
+	agent       *agent.Agent
+	sessionRepo repository.SessionRepository
 }
 
 // NewChatHandler 创建对话处理器
-func NewChatHandler(agent *agent.Agent) *ChatHandler {
-	return &ChatHandler{agent: agent}
+func NewChatHandler(agent *agent.Agent, sessionRepo repository.SessionRepository) *ChatHandler {
+	return &ChatHandler{
+		agent:       agent,
+		sessionRepo: sessionRepo,
+	}
 }
 
 // ChatRequest 对话请求

@@ -3,6 +3,7 @@ package api
 import (
 	"ai-ops/internal/agent"
 	"ai-ops/internal/api/handler"
+	"ai-ops/internal/repository"
 	"ai-ops/internal/security"
 	"ai-ops/internal/ssh"
 	"ai-ops/internal/tool"
@@ -17,6 +18,10 @@ type RouterConfig struct {
 	SSHPool      *ssh.Pool
 	PolicyStore  *security.PolicyStore
 	AuditLogger  *security.AuditLogger
+	HostRepo     repository.HostRepository
+	SessionRepo  repository.SessionRepository
+	GroupRepo    repository.GroupRepository
+	ConfigRepo   repository.ConfigRepository
 	Version      string
 	Mode         string // debug / release
 }
@@ -36,10 +41,10 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 	r.Use(CORSMiddleware())
 
 	// 创建 handlers
-	chatHandler := handler.NewChatHandler(cfg.Agent)
-	hostHandler := handler.NewHostHandler(cfg.SSHPool)
+	chatHandler := handler.NewChatHandler(cfg.Agent, cfg.SessionRepo)
+	hostHandler := handler.NewHostHandler(cfg.SSHPool, cfg.HostRepo, cfg.GroupRepo)
 	toolHandler := handler.NewToolHandler(cfg.ToolRegistry, cfg.SSHPool)
-	systemHandler := handler.NewSystemHandler(cfg.Version, cfg.PolicyStore, cfg.AuditLogger)
+	systemHandler := handler.NewSystemHandler(cfg.Version, cfg.PolicyStore, cfg.AuditLogger, cfg.ConfigRepo)
 
 	// API 路由组
 	api := r.Group("/api")

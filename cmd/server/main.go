@@ -10,11 +10,14 @@ import (
 	"ai-ops/internal/api"
 	"ai-ops/internal/config"
 	"ai-ops/internal/llm"
+	"ai-ops/internal/model"
+	"ai-ops/internal/repository"
 	"ai-ops/internal/security"
 	"ai-ops/internal/ssh"
 	"ai-ops/internal/tool"
 	"ai-ops/internal/tool/builtin"
 	"ai-ops/pkg/logger"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -50,6 +53,19 @@ func main() {
 		zap.String("llm_model", cfg.LLM.Model),
 	)
 
+	// 2.1 初始化数据库
+	db, err := repository.InitDB(cfg.Database.DSN)
+	if err != nil {
+		logger.Fatal("数据库初始化失败", zap.Error(err))
+	}
+	logger.Info("数据库初始化完成", zap.String("dsn", cfg.Database.DSN))
+
+	// 创建 Repository 实例
+	hostRepo := repository.NewHostRepository(db)
+	sessionRepo := repository.NewSessionRepository(db)
+	groupRepo := repository.NewGroupRepository(db)
+	configRepo := repository.NewConfigRepository(db)
+
 	// 3. 初始化 SSH 连接池
 	sshPool := ssh.NewPool(ssh.Config{
 		DefaultTimeout:    cfg.SSH.DefaultTimeout,
@@ -66,7 +82,28 @@ func main() {
 	auditLogger := security.NewAuditLogger("./data/command_audit.jsonl")
 	ssh.SetCommandPolicyStore(policyStore, auditLogger)
 
-	// 3.1 加载配置文件中的预定义主机
+	// 3.1 从数据库加载主机到SSH Pool
+	dbHosts, _ := hostRepo.List(repository.HostFilter{})
+	for _, dbHost := range dbHosts {
+		sshPool.AddHost(ssh.HostInfo{
+			Name:       dbHost.Name,
+			Host:       dbHost.IP,
+			Port:       dbHost.Port,
+			User:       dbHost.User,
+			Group:      dbHost.Group,
+			Tags:       dbHost.Tags,
+			AuthType:   dbHost.AuthType,
+			Password:   dbHost.Password,
+			KeyPath:    dbHost.KeyPath,
+			KeyContent: dbHost.KeyContent,
+		})
+		logger.Debug("从数据库加载主机", zap.String("name", dbHost.Name), zap.String("host", dbHost.IP))
+	}
+	if len(dbHosts) > 0 {
+		logger.Info("从数据库加载主机", zap.Int("count", len(dbHosts)))
+	}
+
+	// 3.1 加载配置文件中的预定义主机（如果不存在于数据库则添加）
 	for _, h := range cfg.Hosts {
 		// 使用默认值填充
 		port := h.Port
@@ -90,6 +127,31 @@ func main() {
 			keyPath = cfg.SSH.DefaultKeyPath
 		}
 
+		// 检查是否已存在于数据库
+		_, err := hostRepo.GetByName(h.Name)
+		if err != nil {
+			// 不存在，添加到数据库
+			hostModel := &model.Host{
+				ID:        h.Name,
+				Name:      h.Name,
+				IP:        h.Host,
+				Port:      port,
+				User:      user,
+				Group:     h.Group,
+				Tags:      h.Tags,
+				AuthType:  authType,
+				Password:  h.Password,
+				KeyPath:   keyPath,
+				Status:    model.HostStatusUnknown,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			if err := hostRepo.Create(hostModel); err != nil {
+				logger.Warn("保存配置主机到数据库失败", zap.String("name", h.Name), zap.Error(err))
+			}
+		}
+
+		// 添加到SSH Pool
 		sshPool.AddHost(ssh.HostInfo{
 			Name:     h.Name,
 			Host:     h.Host,
@@ -160,6 +222,10 @@ func main() {
 		SSHPool:      sshPool,
 		PolicyStore:  policyStore,
 		AuditLogger:  auditLogger,
+		HostRepo:     hostRepo,
+		SessionRepo:  sessionRepo,
+		GroupRepo:    groupRepo,
+		ConfigRepo:   configRepo,
 		Version:      Version,
 		Mode:         cfg.Server.Mode,
 	})

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"ai-ops/internal/repository"
 	"ai-ops/internal/security"
 
 	"github.com/gin-gonic/gin"
@@ -13,19 +14,21 @@ import (
 
 // SystemHandler 系统处理器
 type SystemHandler struct {
-	startTime time.Time
-	version   string
-	policy    *security.PolicyStore
-	audit     *security.AuditLogger
+	startTime  time.Time
+	version    string
+	policy     *security.PolicyStore
+	audit      *security.AuditLogger
+	configRepo repository.ConfigRepository
 }
 
 // NewSystemHandler 创建系统处理器
-func NewSystemHandler(version string, policy *security.PolicyStore, audit *security.AuditLogger) *SystemHandler {
+func NewSystemHandler(version string, policy *security.PolicyStore, audit *security.AuditLogger, configRepo repository.ConfigRepository) *SystemHandler {
 	return &SystemHandler{
-		startTime: time.Now(),
-		version:   version,
-		policy:    policy,
-		audit:     audit,
+		startTime:  time.Now(),
+		version:    version,
+		policy:     policy,
+		audit:      audit,
+		configRepo: configRepo,
 	}
 }
 
