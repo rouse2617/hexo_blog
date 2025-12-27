@@ -44,39 +44,64 @@ func (t *CheckCPUTool) Execute(ctx *tool.Context, params map[string]interface{})
 		return tool.NewErrorResult("SSH 上下文未初始化"), nil
 	}
 
-	// CPU 检查命令：获取 CPU 使用率和负载
-	cmd := `echo "=== CPU Usage ===" && top -bn1 | grep "Cpu(s)" | awk '{print "CPU Usage: " $2 "% user, " $4 "% system, " $8 "% idle"}' && echo "=== Load Average ===" && uptime | awk -F'load average:' '{print "Load Average:" $2}'`
+	// CPU 检查命令：拆分执行，避免触发只读白名单的 unsafe_shell_syntax（如 && / ; 等）
+	// 且避免使用管道（|），以便匹配默认白名单中的 top 规则。
+	cpuCmd := `top -bn1`
+	loadCmd := `uptime`
 
 	if host != "" {
 		// 单节点
-		output, err := ctx.SSH.Exec(host, cmd)
+		cpuOut, err := ctx.SSH.Exec(host, cpuCmd)
+		if err != nil {
+			return tool.NewErrorResult(fmt.Sprintf("执行失败: %v", err)), nil
+		}
+		cpuOut = strings.Join(strings.Split(cpuOut, "\n")[:minInt(20, len(strings.Split(cpuOut, "\n")))], "\n")
+		loadOut, err := ctx.SSH.Exec(host, loadCmd)
 		if err != nil {
 			return tool.NewErrorResult(fmt.Sprintf("执行失败: %v", err)), nil
 		}
 		return tool.NewResult(map[string]interface{}{
 			"host":   host,
-			"output": strings.TrimSpace(output),
+			"cpu":    strings.TrimSpace(cpuOut),
+			"load":   strings.TrimSpace(loadOut),
 		}, fmt.Sprintf("成功获取 %s 的 CPU 信息", host)), nil
 	}
 
 	if len(hosts) > 0 {
-		// 多节点
-		results := ctx.SSH.BatchExec(hosts, cmd)
-		data := make([]map[string]interface{}, len(results))
-		for i, r := range results {
+		data := make([]map[string]interface{}, 0, len(hosts))
+		for _, h := range hosts {
 			item := map[string]interface{}{
-				"host":   r.Host,
-				"output": strings.TrimSpace(r.Output),
+				"host": h,
 			}
-			if r.Error != nil {
-				item["error"] = r.Error.Error()
+			cpuOut, err := ctx.SSH.Exec(h, cpuCmd)
+			if err != nil {
+				item["error"] = err.Error()
+				data = append(data, item)
+				continue
 			}
-			data[i] = item
+			cpuOut = strings.Join(strings.Split(cpuOut, "\n")[:minInt(20, len(strings.Split(cpuOut, "\n")))], "\n")
+			loadOut, err := ctx.SSH.Exec(h, loadCmd)
+			if err != nil {
+				item["error"] = err.Error()
+				item["cpu"] = strings.TrimSpace(cpuOut)
+				data = append(data, item)
+				continue
+			}
+			item["cpu"] = strings.TrimSpace(cpuOut)
+			item["load"] = strings.TrimSpace(loadOut)
+			data = append(data, item)
 		}
 		return tool.NewResult(data, fmt.Sprintf("成功检查 %d 个节点的 CPU", len(hosts))), nil
 	}
 
 	return tool.NewErrorResult("请指定 host 或 hosts 参数"), nil
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func NewCheckCPUTool() *CheckCPUTool { return &CheckCPUTool{} }
