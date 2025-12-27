@@ -57,7 +57,11 @@
       </el-table-column>
       <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="getStatusType(row.status)" size="small">
+          <el-tag 
+            :type="getStatusType(row.status)" 
+            :effect="row.status === 'online' ? 'light' : 'plain'"
+            size="small"
+          >
             {{ getStatusText(row.status) }}
           </el-tag>
         </template>

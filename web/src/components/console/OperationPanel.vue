@@ -43,15 +43,30 @@
               type="textarea"
               :rows="4"
               placeholder="请输入要执行的命令"
+              :class="{ 'dangerous-command': isDangerous, 'critical-command': isCritical }"
             />
+            <div v-if="dangerWarning" class="danger-warning">
+              <el-icon><Warning /></el-icon>
+              <span>{{ dangerWarning }}</span>
+            </div>
+            <div v-if="highlightedCommand && commandForm.command" class="command-preview">
+              <span class="preview-label">命令预览:</span>
+              <div class="preview-content" v-html="highlightedCommand"></div>
+            </div>
           </el-form-item>
           <el-form-item label="超时时间">
             <el-input-number v-model="commandForm.timeout" :min="1" :max="300" />
             <span style="margin-left: 10px; color: var(--el-text-color-secondary)">秒</span>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="handleExecuteCommand" :loading="executing">
-              执行命令
+            <el-button 
+              type="primary" 
+              @click="handleExecuteCommand" 
+              :loading="executing"
+              :danger="isCritical"
+            >
+              <el-icon v-if="isCritical"><Warning /></el-icon>
+              {{ isCritical ? '执行危险命令' : '执行命令' }}
             </el-button>
           </el-form-item>
         </el-form>
@@ -75,9 +90,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Warning } from '@element-plus/icons-vue'
 import { useConsoleStore } from '@/stores/console'
+import { isDangerousCommand, isCriticalCommand, getDangerousCommandWarning, highlightDangerousKeywords } from '@/utils/dangerousCommands'
 
 const consoleStore = useConsoleStore()
 
@@ -95,6 +112,23 @@ const logForm = ref({
 const commandForm = ref({
   command: '',
   timeout: 30
+})
+
+// 检测命令是否危险
+const isDangerous = computed(() => {
+  return commandForm.value.command ? isDangerousCommand(commandForm.value.command) : false
+})
+
+const isCritical = computed(() => {
+  return commandForm.value.command ? isCriticalCommand(commandForm.value.command) : false
+})
+
+const dangerWarning = computed(() => {
+  return commandForm.value.command ? getDangerousCommandWarning(commandForm.value.command) : ''
+})
+
+const highlightedCommand = computed(() => {
+  return commandForm.value.command ? highlightDangerousKeywords(commandForm.value.command) : ''
 })
 
 const handleTabChange = (tab: string) => {
@@ -152,13 +186,52 @@ const handleExecuteLog = () => {
   executeOperation('query_log', params)
 }
 
-const handleExecuteCommand = () => {
+const handleExecuteCommand = async () => {
   if (!commandForm.value.command.trim()) {
     ElMessage.warning('请输入命令')
     return
   }
+  
+  const command = commandForm.value.command.trim()
+  
+  // 危险命令二次确认
+  if (isCritical.value) {
+    try {
+      await ElMessageBox.confirm(
+        `⚠️ 高危警告\n\n${dangerWarning.value}\n\n命令: ${command}\n\n确定要继续执行吗？`,
+        '危险操作确认',
+        {
+          confirmButtonText: '确定执行',
+          cancelButtonText: '取消',
+          type: 'warning',
+          dangerouslyUseHTMLString: false,
+          distinguishCancelAndClose: true
+        }
+      )
+    } catch {
+      // 用户取消
+      return
+    }
+  } else if (isDangerous.value) {
+    try {
+      await ElMessageBox.confirm(
+        `⚠️ 警告\n\n${dangerWarning.value}\n\n命令: ${command}\n\n确定要继续执行吗？`,
+        '危险操作确认',
+        {
+          confirmButtonText: '确定执行',
+          cancelButtonText: '取消',
+          type: 'warning',
+          distinguishCancelAndClose: true
+        }
+      )
+    } catch {
+      // 用户取消
+      return
+    }
+  }
+  
   executeOperation('run_command', {
-    command: commandForm.value.command,
+    command: command,
     timeout: commandForm.value.timeout
   })
 }
@@ -185,5 +258,54 @@ const handleCheckDisk = () => {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.dangerous-command :deep(.el-textarea__inner) {
+  border-color: #e6a23c;
+}
+
+.critical-command :deep(.el-textarea__inner) {
+  border-color: #f56c6c;
+  background-color: #fef0f0;
+}
+
+.danger-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #fdf6ec;
+  border: 1px solid #e6a23c;
+  border-radius: 4px;
+  color: #e6a23c;
+  font-size: 14px;
+}
+
+.critical-command ~ .danger-warning {
+  background-color: #fef0f0;
+  border-color: #f56c6c;
+  color: #f56c6c;
+}
+
+.command-preview {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.preview-label {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.preview-content {
+  display: inline;
+  color: var(--el-text-color-primary);
 }
 </style>

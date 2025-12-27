@@ -39,7 +39,18 @@
 
           <div class="result-content">
             <div v-if="result.error" class="error-section">
-              <h4>错误信息</h4>
+              <div class="error-header">
+                <h4>错误信息</h4>
+                <el-button
+                  type="primary"
+                  link
+                  size="small"
+                  @click="handleCopyError(result)"
+                >
+                  <el-icon><DocumentCopy /></el-icon>
+                  复制错误
+                </el-button>
+              </div>
               <pre class="error-text">{{ result.error }}</pre>
             </div>
 
@@ -100,7 +111,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import { CircleCheck, CircleClose, DocumentCopy } from '@element-plus/icons-vue'
 import type { BatchExecuteResult } from '@/api/operations'
 import { useConsoleStore } from '@/stores/console'
 
@@ -131,6 +142,16 @@ const handleCopy = (result: BatchExecuteResult) => {
   if (text) {
     navigator.clipboard.writeText(text).then(() => {
       ElMessage.success('已复制到剪贴板')
+    }).catch(() => {
+      ElMessage.error('复制失败')
+    })
+  }
+}
+
+const handleCopyError = (result: BatchExecuteResult) => {
+  if (result.error) {
+    navigator.clipboard.writeText(result.error).then(() => {
+      ElMessage.success('错误信息已复制到剪贴板')
     }).catch(() => {
       ElMessage.error('复制失败')
     })
@@ -218,8 +239,15 @@ const emit = defineEmits<{
   margin-bottom: 15px;
 }
 
+.error-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
 .error-section h4 {
-  margin: 0 0 10px 0;
+  margin: 0;
   color: var(--el-color-danger);
 }
 
