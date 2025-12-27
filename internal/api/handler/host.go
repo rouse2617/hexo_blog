@@ -2,6 +2,7 @@ package handler
 
 import (
 	"ai-ops/internal/ssh"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,17 +19,61 @@ func NewHostHandler(sshPool *ssh.Pool) *HostHandler {
 
 // HostInfo 主机信息
 type HostInfo struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name" binding:"required"`
-	Host     string   `json:"host" binding:"required"`
-	Port     int      `json:"port"`
-	User     string   `json:"user"`
-	Group    string   `json:"group"`
-	Tags     []string `json:"tags"`
-	AuthType string   `json:"auth_type"` // password / key
-	Password string   `json:"password,omitempty"`
-	KeyPath  string   `json:"key_path,omitempty"`
-	Status   string   `json:"status"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name" binding:"required"`
+	Host        string   `json:"host" binding:"required"`
+	Port        int      `json:"port"`
+	User        string   `json:"user"`
+	Username    string   `json:"username"` // 前端字段兼容
+	Group       string   `json:"group"`
+	Tags        []string `json:"tags"`
+	AuthType    string   `json:"auth_type"` // password / key
+	Password    string   `json:"password,omitempty"`
+	PrivateKey  string   `json:"privateKey,omitempty"`  // 私钥内容（前端传入）
+	KeyPath     string   `json:"key_path,omitempty"`    // 私钥路径
+	Description string   `json:"description,omitempty"` // 描述
+	Status      string   `json:"status"`
+}
+
+// HostResponse 返回给前端的主机信息（使用 username 字段）
+type HostResponse struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Host        string   `json:"host"`
+	Port        int      `json:"port"`
+	User        string   `json:"user,omitempty"`
+	Username    string   `json:"username"`
+	Group       string   `json:"group,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	AuthType    string   `json:"auth_type,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Status      string   `json:"status"`
+}
+
+// getUser 获取用户名（兼容 user 和 username 字段）
+func (h *HostInfo) getUser() string {
+	if h.User != "" {
+		return h.User
+	}
+	if h.Username != "" {
+		return h.Username
+	}
+	return "root"
+}
+
+// getAuthType 获取认证类型
+func (h *HostInfo) getAuthType() string {
+	if h.AuthType != "" {
+		return h.AuthType
+	}
+	// 根据是否有密码或私钥自动判断
+	if h.Password != "" {
+		return "password"
+	}
+	if h.PrivateKey != "" {
+		return "key_content"
+	}
+	return "key"
 }
 
 // ListHosts 获取主机列表
@@ -38,17 +83,66 @@ func (h *HostHandler) ListHosts(c *gin.Context) {
 	keyword := c.Query("keyword")
 
 	// 从 SSH Pool 获取主机列表
-	// 这里简化处理，实际应该从数据库获取
-	hosts := make([]HostInfo, 0)
+	poolHosts := h.sshPool.ListHosts()
+	hosts := make([]HostResponse, 0, len(poolHosts))
 
-	// TODO: 实现过滤逻辑
-	_ = group
-	_ = keyword
+	for _, info := range poolHosts {
+		// 过滤逻辑
+		if group != "" && info.Group != group {
+			continue
+		}
+		if keyword != "" && !containsKeyword(info, keyword) {
+			continue
+		}
+
+		hosts = append(hosts, HostResponse{
+			ID:       info.Name,
+			Name:     info.Name,
+			Host:     info.Host,
+			Port:     info.Port,
+			User:     info.User,
+			Username: info.User,
+			Group:    info.Group,
+			Tags:     info.Tags,
+			AuthType: info.AuthType,
+			Status:   "unknown",
+		})
+	}
 
 	Success(c, gin.H{
-		"hosts": hosts,
+		"list":  hosts,
 		"total": len(hosts),
 	})
+}
+
+// GetAllHosts 获取所有主机（不分页，用于选择器）
+// GET /api/hosts/all
+func (h *HostHandler) GetAllHosts(c *gin.Context) {
+	poolHosts := h.sshPool.ListHosts()
+	hosts := make([]HostResponse, 0, len(poolHosts))
+
+	for _, info := range poolHosts {
+		hosts = append(hosts, HostResponse{
+			ID:       info.Name,
+			Name:     info.Name,
+			Host:     info.Host,
+			Port:     info.Port,
+			User:     info.User,
+			Username: info.User,
+			Group:    info.Group,
+			Tags:     info.Tags,
+			Status:   "unknown",
+		})
+	}
+
+	Success(c, hosts)
+}
+
+// containsKeyword 检查主机信息是否包含关键字
+func containsKeyword(info ssh.HostInfo, keyword string) bool {
+	return strings.Contains(info.Name, keyword) ||
+		strings.Contains(info.Host, keyword) ||
+		strings.Contains(info.User, keyword)
 }
 
 // CreateHost 添加主机
@@ -64,29 +158,38 @@ func (h *HostHandler) CreateHost(c *gin.Context) {
 	if req.Port == 0 {
 		req.Port = 22
 	}
-	if req.User == "" {
-		req.User = "root"
-	}
-	if req.AuthType == "" {
-		req.AuthType = "key"
-	}
+
+	user := req.getUser()
+	authType := req.getAuthType()
 
 	// 添加到 SSH Pool
 	h.sshPool.AddHost(ssh.HostInfo{
-		Name:     req.Name,
-		Host:     req.Host,
-		Port:     req.Port,
-		User:     req.User,
-		AuthType: req.AuthType,
-		Password: req.Password,
-		KeyPath:  req.KeyPath,
+		Name:       req.Name,
+		Host:       req.Host,
+		Port:       req.Port,
+		User:       user,
+		Group:      req.Group,
+		Tags:       req.Tags,
+		AuthType:   authType,
+		Password:   req.Password,
+		KeyPath:    req.KeyPath,
+		KeyContent: req.PrivateKey,
 	})
 
 	// TODO: 保存到数据库
 
-	SuccessWithMessage(c, "添加成功", gin.H{
-		"id":   req.Name, // 暂时用 name 作为 id
-		"name": req.Name,
+	// 返回完整的主机信息
+	Success(c, HostResponse{
+		ID:       req.Name,
+		Name:     req.Name,
+		Host:     req.Host,
+		Port:     req.Port,
+		User:     user,
+		Username: user,
+		Group:    req.Group,
+		Tags:     req.Tags,
+		AuthType: authType,
+		Status:   "unknown",
 	})
 }
 
@@ -155,14 +258,39 @@ func (h *HostHandler) GetHost(c *gin.Context) {
 		return
 	}
 
-	Success(c, HostInfo{
+	Success(c, HostResponse{
 		ID:       info.Name,
 		Name:     info.Name,
 		Host:     info.Host,
 		Port:     info.Port,
 		User:     info.User,
+		Username: info.User,
+		Group:    info.Group,
+		Tags:     info.Tags,
 		AuthType: info.AuthType,
-		KeyPath:  info.KeyPath,
+		Status:   "unknown",
+	})
+}
+
+// BatchDeleteHosts 批量删除主机
+// POST /api/hosts/batch-delete
+func (h *HostHandler) BatchDeleteHosts(c *gin.Context) {
+	var req struct {
+		IDs []string `json:"ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		ParamError(c, "参数错误: "+err.Error())
+		return
+	}
+
+	for _, id := range req.IDs {
+		h.sshPool.RemoveHost(id)
+	}
+
+	// TODO: 从数据库删除
+
+	SuccessWithMessage(c, "删除成功", gin.H{
+		"deleted": len(req.IDs),
 	})
 }
 

@@ -23,17 +23,18 @@ type Tool interface {
 
 // Parameter 参数定义
 type Parameter struct {
-	Name        string        `json:"name"`                  // 参数名
-	Type        string        `json:"type"`                  // 类型: string, int, bool, []string
-	Description string        `json:"description"`           // 参数描述（给 LLM 看）
-	Required    bool          `json:"required"`              // 是否必填
-	Default     interface{}   `json:"default,omitempty"`     // 默认值
-	Enum        []interface{} `json:"enum,omitempty"`        // 可选值枚举
+	Name        string        `json:"name"`              // 参数名
+	Type        string        `json:"type"`              // 类型: string, int, bool, []string
+	Description string        `json:"description"`       // 参数描述（给 LLM 看）
+	Required    bool          `json:"required"`          // 是否必填
+	Default     interface{}   `json:"default,omitempty"` // 默认值
+	Enum        []interface{} `json:"enum,omitempty"`    // 可选值枚举
 }
 
 // Context 执行上下文
 type Context struct {
 	SessionID string        // 会话 ID
+	Hosts     []string      // 关联主机（用于参数规范化/默认注入）
 	SSH       *ssh.Pool     // SSH 连接池
 	Timeout   time.Duration // 超时时间
 }

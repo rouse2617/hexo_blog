@@ -108,11 +108,74 @@ func (r *Registry) Has(name string) bool {
 	return ok
 }
 
+func hasNonEmptyHostParams(params map[string]interface{}) bool {
+	if params == nil {
+		return false
+	}
+	if v, ok := params["host"]; ok {
+		if v != nil {
+			if s, ok := v.(string); ok {
+				if s != "" {
+					return true
+				}
+			} else {
+				return true
+			}
+		}
+	}
+	if v, ok := params["hosts"]; ok {
+		switch vv := v.(type) {
+		case []string:
+			return len(vv) > 0
+		case []interface{}:
+			return len(vv) > 0
+		}
+	}
+	return false
+}
+
+func shouldInjectHosts(paramsDef []Parameter) (bool, bool) {
+	supportsHost := false
+	supportsHosts := false
+	for _, p := range paramsDef {
+		switch p.Name {
+		case "host":
+			supportsHost = true
+		case "hosts":
+			supportsHosts = true
+		}
+	}
+	return supportsHost, supportsHosts
+}
+
 // Execute 执行工具
 func (r *Registry) Execute(ctx *Context, name string, params map[string]interface{}) (*Result, error) {
 	tool, ok := r.Get(name)
 	if !ok {
 		return nil, fmt.Errorf("工具不存在: %s", name)
+	}
+
+	if params == nil {
+		params = make(map[string]interface{})
+	}
+
+	if ctx != nil && len(ctx.Hosts) > 0 {
+		supportsHost, supportsHosts := shouldInjectHosts(tool.Parameters())
+		if (supportsHost || supportsHosts) && !hasNonEmptyHostParams(params) {
+			if len(ctx.Hosts) == 1 {
+				if supportsHost {
+					params["host"] = ctx.Hosts[0]
+				} else {
+					params["hosts"] = ctx.Hosts
+				}
+			} else {
+				if supportsHosts {
+					params["hosts"] = ctx.Hosts
+				} else if supportsHost {
+					params["host"] = ctx.Hosts[0]
+				}
+			}
+		}
 	}
 
 	return tool.Execute(ctx, params)

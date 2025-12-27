@@ -22,9 +22,9 @@ type MockTool struct {
 	result      *tool.Result
 }
 
-func (t *MockTool) Name() string                  { return t.name }
-func (t *MockTool) Description() string           { return t.description }
-func (t *MockTool) Parameters() []tool.Parameter  { return t.params }
+func (t *MockTool) Name() string                 { return t.name }
+func (t *MockTool) Description() string          { return t.description }
+func (t *MockTool) Parameters() []tool.Parameter { return t.params }
 func (t *MockTool) Execute(ctx *tool.Context, params map[string]interface{}) (*tool.Result, error) {
 	if t.result != nil {
 		return t.result, nil

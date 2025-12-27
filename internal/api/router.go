@@ -3,6 +3,7 @@ package api
 import (
 	"ai-ops/internal/agent"
 	"ai-ops/internal/api/handler"
+	"ai-ops/internal/security"
 	"ai-ops/internal/ssh"
 	"ai-ops/internal/tool"
 
@@ -14,6 +15,8 @@ type RouterConfig struct {
 	Agent        *agent.Agent
 	ToolRegistry *tool.Registry
 	SSHPool      *ssh.Pool
+	PolicyStore  *security.PolicyStore
+	AuditLogger  *security.AuditLogger
 	Version      string
 	Mode         string // debug / release
 }
@@ -36,7 +39,7 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 	chatHandler := handler.NewChatHandler(cfg.Agent)
 	hostHandler := handler.NewHostHandler(cfg.SSHPool)
 	toolHandler := handler.NewToolHandler(cfg.ToolRegistry, cfg.SSHPool)
-	systemHandler := handler.NewSystemHandler(cfg.Version)
+	systemHandler := handler.NewSystemHandler(cfg.Version, cfg.PolicyStore, cfg.AuditLogger)
 
 	// API 路由组
 	api := r.Group("/api")
@@ -48,9 +51,11 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 		chat := api.Group("/chat")
 		{
 			chat.POST("", chatHandler.Chat)
+			chat.POST("/send", chatHandler.Chat) // 兼容前端 /chat/send 调用
 			chat.POST("/stream", chatHandler.StreamChat)
 			chat.GET("/sessions", chatHandler.GetSessions)
-			chat.GET("/history", chatHandler.GetHistory)
+			chat.POST("/sessions", chatHandler.CreateSession)
+			chat.GET("/history/:session_id", chatHandler.GetHistory)
 			chat.DELETE("/sessions/:id", chatHandler.DeleteSession)
 		}
 
@@ -58,12 +63,14 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 		hosts := api.Group("/hosts")
 		{
 			hosts.GET("", hostHandler.ListHosts)
+			hosts.GET("/all", hostHandler.GetAllHosts)
 			hosts.POST("", hostHandler.CreateHost)
+			hosts.POST("/batch-delete", hostHandler.BatchDeleteHosts)
+			hosts.POST("/import", hostHandler.ImportHosts)
 			hosts.GET("/:id", hostHandler.GetHost)
 			hosts.PUT("/:id", hostHandler.UpdateHost)
 			hosts.DELETE("/:id", hostHandler.DeleteHost)
 			hosts.POST("/:id/test", hostHandler.TestConnection)
-			hosts.POST("/import", hostHandler.ImportHosts)
 		}
 
 		// 分组 API
@@ -78,7 +85,10 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 		tools := api.Group("/tools")
 		{
 			tools.GET("", toolHandler.ListTools)
+			tools.GET("/builtin", toolHandler.ListBuiltinTools)
+			tools.GET("/script", toolHandler.ListScriptTools)
 			tools.GET("/:name", toolHandler.GetTool)
+			tools.PUT("/:name/toggle", toolHandler.ToggleTool)
 			tools.POST("/:name/execute", toolHandler.ExecuteTool)
 		}
 
@@ -88,6 +98,9 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 			system.GET("/info", systemHandler.GetSystemInfo)
 			system.GET("/config", systemHandler.GetConfig)
 			system.PUT("/config", systemHandler.UpdateConfig)
+			system.GET("/command-policy", systemHandler.GetCommandPolicy)
+			system.PUT("/command-policy", systemHandler.UpdateCommandPolicy)
+			system.GET("/audit/commands", systemHandler.GetCommandAudit)
 		}
 	}
 

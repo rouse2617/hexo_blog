@@ -199,6 +199,61 @@ func TestExecute(t *testing.T) {
 	}
 }
 
+func TestExecute_HostInjection_Single(t *testing.T) {
+	registry := NewRegistry()
+
+	tt := &MockTool{
+		name: "test_tool",
+		parameters: []Parameter{
+			{Name: "host", Type: "string", Required: true},
+		},
+		executeFunc: func(ctx *Context, params map[string]interface{}) (*Result, error) {
+			host := GetStringParam(params, "host", "")
+			return NewResult(host, "ok"), nil
+		},
+	}
+	registry.RegisterBuiltin(tt)
+
+	ctx := &Context{Hosts: []string{"node3"}}
+	res, err := registry.Execute(ctx, "test_tool", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("执行工具失败: %v", err)
+	}
+	if res.Data != "node3" {
+		t.Fatalf("期望注入 host=node3, 实际 %v", res.Data)
+	}
+}
+
+func TestExecute_HostInjection_Multi(t *testing.T) {
+	registry := NewRegistry()
+
+	tt := &MockTool{
+		name: "test_tool",
+		parameters: []Parameter{
+			{Name: "hosts", Type: "[]string", Required: true},
+		},
+		executeFunc: func(ctx *Context, params map[string]interface{}) (*Result, error) {
+			hosts := GetStringSliceParam(params, "hosts")
+			return NewResult(hosts, "ok"), nil
+		},
+	}
+	registry.RegisterBuiltin(tt)
+
+	ctx := &Context{Hosts: []string{"node2", "node3"}}
+	res, err := registry.Execute(ctx, "test_tool", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("执行工具失败: %v", err)
+	}
+
+	got, ok := res.Data.([]string)
+	if !ok {
+		t.Fatalf("期望返回 []string, 实际 %T", res.Data)
+	}
+	if len(got) != 2 || got[0] != "node2" || got[1] != "node3" {
+		t.Fatalf("期望注入 hosts=[node2 node3], 实际 %v", got)
+	}
+}
+
 func TestGeneratePrompt(t *testing.T) {
 	registry := NewRegistry()
 

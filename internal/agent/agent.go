@@ -49,19 +49,19 @@ func NewAgent(llmClient llm.Client, toolRegistry *tool.Registry, sshPool *ssh.Po
 
 // ChatRequest 对话请求
 type ChatRequest struct {
-	SessionID string   // 会话 ID
-	Message   string   // 用户消息
-	Hosts     []string // 关联主机
+	SessionID string        // 会话 ID
+	Message   string        // 用户消息
+	Hosts     []string      // 关联主机
 	History   []llm.Message // 历史消息
 }
 
 // ChatResponse 对话响应
 type ChatResponse struct {
-	SessionID  string      // 会话 ID
-	Reply      string      // 回复内容
-	ToolCalls  []ToolCallRecord // 工具调用记录
-	Thinking   string      // 思考过程（可选）
-	Error      string      // 错误信息
+	SessionID string           // 会话 ID
+	Reply     string           // 回复内容
+	ToolCalls []ToolCallRecord // 工具调用记录
+	Thinking  string           // 思考过程（可选）
+	Error     string           // 错误信息
 }
 
 // ToolCallRecord 工具调用记录
@@ -165,6 +165,7 @@ func (a *Agent) executeToolCalls(ctx context.Context, toolCalls []llm.ToolCall, 
 
 	// 创建工具执行上下文
 	toolCtx := &tool.Context{
+		Hosts:   hosts,
 		SSH:     a.sshPool,
 		Timeout: 30 * time.Second,
 	}
@@ -253,6 +254,14 @@ func (a *Agent) ChatStream(ctx context.Context, req ChatRequest, callback func(c
 		var toolCalls []llm.ToolCall
 		done := false
 
+		// 通知前端：正在调用 LLM
+		callback(StreamChunk{
+			Type:    "thinking",
+			Step:    i + 1,
+			Status:  "calling_llm",
+			Content: "正在分析您的问题...",
+		})
+
 		// 流式调用 LLM
 		err := a.llmClient.ChatStreamWithTools(ctx, messages, toolDefs, func(chunk llm.StreamChunk) {
 			switch chunk.Type {
@@ -277,11 +286,20 @@ func (a *Agent) ChatStream(ctx context.Context, req ChatRequest, callback func(c
 
 		// 检查是否有工具调用
 		if len(toolCalls) > 0 {
+			// 通知前端：准备执行工具
+			callback(StreamChunk{
+				Type:    "thinking",
+				Step:    i + 1,
+				Status:  "executing_tools",
+				Content: fmt.Sprintf("需要执行 %d 个工具来获取信息...", len(toolCalls)),
+			})
+
 			// 通知前端工具调用
 			for _, tc := range toolCalls {
 				callback(StreamChunk{
 					Type:     "tool_call",
 					ToolCall: &tc,
+					Status:   "pending",
 				})
 			}
 
@@ -295,6 +313,14 @@ func (a *Agent) ChatStream(ctx context.Context, req ChatRequest, callback func(c
 					ToolResult: &r,
 				})
 			}
+
+			// 通知前端：工具执行完成，继续分析
+			callback(StreamChunk{
+				Type:    "thinking",
+				Step:    i + 1,
+				Status:  "analyzing_results",
+				Content: "正在分析工具执行结果...",
+			})
 
 			// 添加消息继续对话
 			messages = append(messages, llm.NewAssistantToolCallMessage(toolCalls))
@@ -314,9 +340,11 @@ func (a *Agent) ChatStream(ctx context.Context, req ChatRequest, callback func(c
 
 // StreamChunk 流式数据块
 type StreamChunk struct {
-	Type       string          `json:"type"` // content, tool_call, tool_result, done, error
+	Type       string          `json:"type"` // content, tool_call, tool_result, thinking, done, error
 	Content    string          `json:"content,omitempty"`
 	ToolCall   *llm.ToolCall   `json:"tool_call,omitempty"`
 	ToolResult *ToolCallRecord `json:"tool_result,omitempty"`
 	Error      string          `json:"error,omitempty"`
+	Step       int             `json:"step,omitempty"`   // 当前步骤
+	Status     string          `json:"status,omitempty"` // 状态描述
 }

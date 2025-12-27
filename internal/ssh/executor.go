@@ -9,18 +9,35 @@ import (
 	"sync"
 	"time"
 
+	"ai-ops/internal/security"
+	"ai-ops/pkg/logger"
+
+	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
 )
 
+var commandPolicyStore *security.PolicyStore
+var commandAuditLogger *security.AuditLogger
+
+// SetCommandPolicyStore sets global command policy store and audit logger used by SSH execution.
+// This is a process-wide guardrail to ensure only whitelisted (read-only) commands can be executed.
+func SetCommandPolicyStore(store *security.PolicyStore, audit *security.AuditLogger) {
+	commandPolicyStore = store
+	commandAuditLogger = audit
+}
+
 // HostInfo 主机信息
 type HostInfo struct {
-	Name     string // 主机名称
-	Host     string // IP 或域名
-	Port     int    // SSH 端口
-	User     string // 用户名
-	AuthType string // 认证类型: password / key
-	Password string // 密码
-	KeyPath  string // 密钥路径
+	Name       string   // 主机名称
+	Host       string   // IP 或域名
+	Port       int      // SSH 端口
+	User       string   // 用户名
+	Group      string   // 分组
+	Tags       []string // 标签
+	AuthType   string   // 认证类型: password / key / key_content
+	Password   string   // 密码
+	KeyPath    string   // 密钥路径
+	KeyContent string   // 密钥内容（直接传入）
 }
 
 // ExecResult 执行结果
@@ -152,8 +169,18 @@ func (p *Pool) createConnection(name string, info HostInfo) (*ssh.Client, error)
 	switch info.AuthType {
 	case "password":
 		authMethods = append(authMethods, ssh.Password(info.Password))
+	case "key_content":
+		// 直接使用传入的私钥内容
+		if info.KeyContent == "" {
+			return nil, fmt.Errorf("私钥内容为空")
+		}
+		signer, err := ssh.ParsePrivateKey([]byte(info.KeyContent))
+		if err != nil {
+			return nil, fmt.Errorf("解析私钥失败: %w", err)
+		}
+		authMethods = append(authMethods, ssh.PublicKeys(signer))
 	case "key", "":
-		// 默认使用密钥认证
+		// 从文件读取密钥
 		keyPath := info.KeyPath
 		if keyPath == "" {
 			keyPath = os.ExpandEnv("$HOME/.ssh/id_rsa")
@@ -225,8 +252,41 @@ func (p *Pool) Exec(host string, cmd string) (string, error) {
 
 // ExecWithTimeout 带超时执行命令
 func (p *Pool) ExecWithTimeout(host string, cmd string, timeout time.Duration) (string, error) {
+	start := time.Now()
+	if commandPolicyStore != nil {
+		allowed, reason := commandPolicyStore.Check(cmd)
+		if !allowed {
+			if commandAuditLogger != nil {
+				_ = commandAuditLogger.Append(security.CommandAuditEvent{
+					Time:    time.Now(),
+					Host:    host,
+					Command: cmd,
+					Allowed: false,
+					Reason:  reason,
+				})
+			}
+			logger.Warn("SSH command blocked by whitelist policy",
+				zap.String("host", host),
+				zap.String("command", cmd),
+				zap.String("reason", reason),
+			)
+			return "", fmt.Errorf("命令被白名单策略拦截: %s", reason)
+		}
+	}
+
 	conn, err := p.getConnection(host)
 	if err != nil {
+		if commandAuditLogger != nil {
+			_ = commandAuditLogger.Append(security.CommandAuditEvent{
+				Time:      time.Now(),
+				Host:      host,
+				Command:   cmd,
+				Allowed:   true,
+				Reason:    "connection_failed",
+				ElapsedMs: time.Since(start).Milliseconds(),
+				Error:     err.Error(),
+			})
+		}
 		return "", err
 	}
 
@@ -272,11 +332,43 @@ func (p *Pool) ExecWithTimeout(host string, cmd string, timeout time.Duration) (
 			if errMsg == "" {
 				errMsg = err.Error()
 			}
+			if commandAuditLogger != nil {
+				_ = commandAuditLogger.Append(security.CommandAuditEvent{
+					Time:      time.Now(),
+					Host:      host,
+					Command:   cmd,
+					Allowed:   true,
+					Reason:    "executed",
+					ElapsedMs: time.Since(start).Milliseconds(),
+					Error:     errMsg,
+				})
+			}
 			return stdout.String(), fmt.Errorf("执行失败: %s", errMsg)
+		}
+		if commandAuditLogger != nil {
+			_ = commandAuditLogger.Append(security.CommandAuditEvent{
+				Time:      time.Now(),
+				Host:      host,
+				Command:   cmd,
+				Allowed:   true,
+				Reason:    "executed",
+				ElapsedMs: time.Since(start).Milliseconds(),
+			})
 		}
 		return stdout.String(), nil
 	case <-ctx.Done():
 		session.Signal(ssh.SIGKILL)
+		if commandAuditLogger != nil {
+			_ = commandAuditLogger.Append(security.CommandAuditEvent{
+				Time:      time.Now(),
+				Host:      host,
+				Command:   cmd,
+				Allowed:   true,
+				Reason:    "timeout",
+				ElapsedMs: time.Since(start).Milliseconds(),
+				Error:     fmt.Sprintf("timeout: %v", timeout),
+			})
+		}
 		return "", fmt.Errorf("执行超时: %v", timeout)
 	}
 }
@@ -337,4 +429,16 @@ func (p *Pool) HostCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return len(p.hosts)
+}
+
+// ListHosts 获取所有主机列表
+func (p *Pool) ListHosts() []HostInfo {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	hosts := make([]HostInfo, 0, len(p.hosts))
+	for _, info := range p.hosts {
+		hosts = append(hosts, info)
+	}
+	return hosts
 }

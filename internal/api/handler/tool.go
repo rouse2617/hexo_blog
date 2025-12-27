@@ -24,11 +24,89 @@ func NewToolHandler(registry *tool.Registry, sshPool *ssh.Pool) *ToolHandler {
 // ListTools 获取工具列表
 // GET /api/tools
 func (h *ToolHandler) ListTools(c *gin.Context) {
-	tools := h.registry.ListInfo()
+	infos := h.registry.ListInfo()
+
+	// 转换为前端期望的格式，添加 enabled 字段
+	tools := make([]gin.H, 0, len(infos))
+	for _, info := range infos {
+		tools = append(tools, gin.H{
+			"name":        info.Name,
+			"description": info.Description,
+			"type":        info.Type,
+			"parameters":  info.Parameters,
+			"enabled":     true, // 默认启用
+		})
+	}
 
 	Success(c, gin.H{
-		"tools": tools,
 		"total": len(tools),
+		"tools": tools,
+	})
+}
+
+// ListBuiltinTools 获取内置工具列表
+// GET /api/tools/builtin
+func (h *ToolHandler) ListBuiltinTools(c *gin.Context) {
+	infos := h.registry.ListInfo()
+
+	tools := make([]gin.H, 0)
+	for _, info := range infos {
+		if info.Type == "builtin" {
+			tools = append(tools, gin.H{
+				"name":        info.Name,
+				"description": info.Description,
+				"type":        info.Type,
+				"parameters":  info.Parameters,
+				"enabled":     true,
+			})
+		}
+	}
+
+	Success(c, tools)
+}
+
+// ListScriptTools 获取脚本工具列表
+// GET /api/tools/script
+func (h *ToolHandler) ListScriptTools(c *gin.Context) {
+	infos := h.registry.ListInfo()
+
+	tools := make([]gin.H, 0)
+	for _, info := range infos {
+		if info.Type == "script" {
+			tools = append(tools, gin.H{
+				"name":        info.Name,
+				"description": info.Description,
+				"type":        info.Type,
+				"parameters":  info.Parameters,
+				"enabled":     true,
+			})
+		}
+	}
+
+	Success(c, tools)
+}
+
+// ToggleTool 启用/禁用工具
+// PUT /api/tools/:name/toggle
+func (h *ToolHandler) ToggleTool(c *gin.Context) {
+	name := c.Param("name")
+	if name == "" {
+		ParamError(c, "name 不能为空")
+		return
+	}
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		ParamError(c, "参数错误: "+err.Error())
+		return
+	}
+
+	// TODO: 实现工具启用/禁用逻辑
+	SuccessWithMessage(c, "操作成功", gin.H{
+		"name":    name,
+		"enabled": req.Enabled,
 	})
 }
 
@@ -64,7 +142,10 @@ func (h *ToolHandler) ExecuteTool(c *gin.Context) {
 	}
 
 	var req struct {
-		Params map[string]interface{} `json:"params"`
+		Params   map[string]interface{} `json:"params"`
+		Hosts    []string               `json:"hosts"`
+		HostIDs  []string               `json:"host_ids"`
+		HostIDs2 []string               `json:"hostIds"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,6 +155,15 @@ func (h *ToolHandler) ExecuteTool(c *gin.Context) {
 
 	// 创建执行上下文
 	ctx := &tool.Context{
+		Hosts: func() []string {
+			if len(req.Hosts) > 0 {
+				return req.Hosts
+			}
+			if len(req.HostIDs) > 0 {
+				return req.HostIDs
+			}
+			return req.HostIDs2
+		}(),
 		SSH: h.sshPool,
 	}
 

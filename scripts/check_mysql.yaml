@@ -1,0 +1,26 @@
+name: check_mysql
+description: 检查 MySQL 服务状态
+path: scripts/check_mysql.sh
+timeout: 30
+enabled: true
+params:
+  - name: host
+    type: string
+    description: MySQL 主机地址
+    required: false
+    default: "localhost"
+  - name: port
+    type: integer
+    description: MySQL 端口
+    required: false
+    default: 3306
+  - name: user
+    type: string
+    description: MySQL 用户名
+    required: true
+    default: ""
+  - name: password
+    type: string
+    description: MySQL 密码
+    required: true
+    default: ""

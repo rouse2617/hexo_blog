@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"io"
+	"time"
 
 	"ai-ops/internal/agent"
 
@@ -20,10 +22,13 @@ func NewChatHandler(agent *agent.Agent) *ChatHandler {
 
 // ChatRequest 对话请求
 type ChatRequest struct {
-	SessionID string   `json:"session_id"`
-	Message   string   `json:"message" binding:"required"`
-	Hosts     []string `json:"hosts"`
-	Stream    bool     `json:"stream"`
+	SessionID  string   `json:"session_id"`
+	SessionID2 string   `json:"sessionId"`
+	Message    string   `json:"message" binding:"required"`
+	Hosts      []string `json:"hosts"`
+	HostIDs    []string `json:"hostIds"`
+	HostIDs2   []string `json:"host_ids"`
+	Stream     bool     `json:"stream"`
 }
 
 // ChatResponseData 对话响应
@@ -42,6 +47,20 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 		return
 	}
 
+	hosts := req.Hosts
+	if len(hosts) == 0 {
+		if len(req.HostIDs) > 0 {
+			hosts = req.HostIDs
+		} else if len(req.HostIDs2) > 0 {
+			hosts = req.HostIDs2
+		}
+	}
+
+	sessionID := req.SessionID
+	if sessionID == "" {
+		sessionID = req.SessionID2
+	}
+
 	// 流式响应
 	if req.Stream {
 		h.chatStream(c, req)
@@ -50,9 +69,9 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 
 	// 普通响应
 	resp, err := h.agent.Chat(c.Request.Context(), agent.ChatRequest{
-		SessionID: req.SessionID,
+		SessionID: sessionID,
 		Message:   req.Message,
-		Hosts:     req.Hosts,
+		Hosts:     hosts,
 	})
 
 	if err != nil {
@@ -76,23 +95,45 @@ func (h *ChatHandler) chatStream(c *gin.Context, req ChatRequest) {
 	c.Header("Transfer-Encoding", "chunked")
 
 	// 流式处理
+	hosts := req.Hosts
+	if len(hosts) == 0 {
+		if len(req.HostIDs) > 0 {
+			hosts = req.HostIDs
+		} else if len(req.HostIDs2) > 0 {
+			hosts = req.HostIDs2
+		}
+	}
+
+	sessionID := req.SessionID
+	if sessionID == "" {
+		sessionID = req.SessionID2
+	}
 	err := h.agent.ChatStream(c.Request.Context(), agent.ChatRequest{
-		SessionID: req.SessionID,
+		SessionID: sessionID,
 		Message:   req.Message,
-		Hosts:     req.Hosts,
+		Hosts:     hosts,
 	}, func(chunk agent.StreamChunk) {
 		// 发送 SSE 事件
 		switch chunk.Type {
+		case "thinking":
+			c.SSEvent("thinking", gin.H{
+				"step":    chunk.Step,
+				"status":  chunk.Status,
+				"content": chunk.Content,
+			})
 		case "content":
 			c.SSEvent("content", gin.H{"content": chunk.Content})
 		case "tool_call":
 			c.SSEvent("tool_call", gin.H{
+				"id":     chunk.ToolCall.ID,
 				"tool":   chunk.ToolCall.Function.Name,
 				"params": chunk.ToolCall.Function.Arguments,
+				"status": chunk.Status,
 			})
 		case "tool_result":
 			c.SSEvent("tool_result", gin.H{
 				"tool":   chunk.ToolResult.Tool,
+				"params": chunk.ToolResult.Params,
 				"result": chunk.ToolResult.Result,
 				"error":  chunk.ToolResult.Error,
 			})
@@ -127,23 +168,40 @@ func (h *ChatHandler) StreamChat(c *gin.Context) {
 // GET /api/chat/sessions
 func (h *ChatHandler) GetSessions(c *gin.Context) {
 	// TODO: 从数据库获取会话列表
-	// 目前返回空列表
+	// 目前返回空数组
 	Success(c, gin.H{
 		"sessions": []interface{}{},
 	})
 }
 
+// CreateSession 创建新会话
+// POST /api/chat/sessions
+func (h *ChatHandler) CreateSession(c *gin.Context) {
+	// 生成会话 ID
+	sessionID := fmt.Sprintf("session-%d", time.Now().UnixNano())
+
+	// TODO: 保存到数据库
+
+	Success(c, gin.H{
+		"sessionId": sessionID,
+	})
+}
+
 // GetHistory 获取对话历史
-// GET /api/chat/history?session_id=xxx
+// GET /api/chat/history/:session_id
 func (h *ChatHandler) GetHistory(c *gin.Context) {
-	sessionID := c.Query("session_id")
+	sessionID := c.Param("session_id")
+	if sessionID == "" {
+		// 兼容 query 参数
+		sessionID = c.Query("session_id")
+	}
 	if sessionID == "" {
 		ParamError(c, "session_id 不能为空")
 		return
 	}
 
 	// TODO: 从数据库获取对话历史
-	// 目前返回空列表
+	// 目前返回空数组
 	Success(c, gin.H{
 		"session_id": sessionID,
 		"messages":   []interface{}{},

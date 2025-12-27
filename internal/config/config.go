@@ -12,6 +12,7 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	LLM      LLMConfig      `yaml:"llm"`
 	SSH      SSHConfig      `yaml:"ssh"`
+	Hosts    []HostConfig   `yaml:"hosts"` // 预定义主机列表
 	Database DatabaseConfig `yaml:"database"`
 	Scripts  ScriptsConfig  `yaml:"scripts"`
 	Agent    AgentConfig    `yaml:"agent"`
@@ -42,6 +43,19 @@ type SSHConfig struct {
 	KeepaliveInterval time.Duration `yaml:"keepalive_interval"` // 心跳间隔
 	DefaultUser       string        `yaml:"default_user"`       // 默认用户
 	DefaultKeyPath    string        `yaml:"default_key_path"`   // 默认密钥路径
+}
+
+// HostConfig 主机配置
+type HostConfig struct {
+	Name     string   `yaml:"name"`                // 主机名称（唯一标识）
+	Host     string   `yaml:"host"`                // IP 地址或域名
+	Port     int      `yaml:"port,omitempty"`      // SSH 端口，默认 22
+	User     string   `yaml:"user,omitempty"`      // 用户名，默认使用 ssh.default_user
+	Group    string   `yaml:"group,omitempty"`     // 分组
+	Tags     []string `yaml:"tags,omitempty"`      // 标签
+	AuthType string   `yaml:"auth_type,omitempty"` // 认证方式: password / key，默认 key
+	Password string   `yaml:"password,omitempty"`  // 密码（auth_type=password 时使用）
+	KeyPath  string   `yaml:"key_path,omitempty"`  // 私钥路径，默认使用 ssh.default_key_path
 }
 
 // DatabaseConfig 数据库配置

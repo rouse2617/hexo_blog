@@ -60,12 +60,13 @@ func NewOpenAIClient(cfg OpenAIConfig) *OpenAIClient {
 
 // openAIRequest OpenAI API 请求结构
 type openAIRequest struct {
-	Model       string        `json:"model"`
-	Messages    []Message     `json:"messages"`
-	Tools       []ToolDef     `json:"tools,omitempty"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Temperature float64       `json:"temperature,omitempty"`
-	Stream      bool          `json:"stream,omitempty"`
+	Model          string    `json:"model"`
+	Messages       []Message `json:"messages"`
+	Tools          []ToolDef `json:"tools,omitempty"`
+	MaxTokens      int       `json:"max_tokens,omitempty"`
+	Temperature    float64   `json:"temperature,omitempty"`
+	Stream         bool      `json:"stream,omitempty"`
+	EnableThinking *bool     `json:"enable_thinking,omitempty"`
 }
 
 // openAIResponse OpenAI API 响应结构
@@ -111,6 +112,10 @@ func (c *OpenAIClient) ChatWithTools(ctx context.Context, messages []Message, to
 		Messages:  messages,
 		MaxTokens: c.maxTokens,
 		Stream:    false,
+	}
+	{
+		v := false
+		reqBody.EnableThinking = &v
 	}
 
 	if len(tools) > 0 {

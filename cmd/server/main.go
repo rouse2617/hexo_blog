@@ -10,6 +10,7 @@ import (
 	"ai-ops/internal/api"
 	"ai-ops/internal/config"
 	"ai-ops/internal/llm"
+	"ai-ops/internal/security"
 	"ai-ops/internal/ssh"
 	"ai-ops/internal/tool"
 	"ai-ops/internal/tool/builtin"
@@ -60,13 +61,73 @@ func main() {
 	defer sshPool.Close()
 	logger.Info("SSH 连接池初始化完成")
 
+	// 3.2 初始化命令白名单策略与审计日志（默认只读）
+	policyStore := security.NewPolicyStore("./data/command_policy.json", security.DefaultCommandPolicy())
+	auditLogger := security.NewAuditLogger("./data/command_audit.jsonl")
+	ssh.SetCommandPolicyStore(policyStore, auditLogger)
+
+	// 3.1 加载配置文件中的预定义主机
+	for _, h := range cfg.Hosts {
+		// 使用默认值填充
+		port := h.Port
+		if port == 0 {
+			port = 22
+		}
+		user := h.User
+		if user == "" {
+			user = cfg.SSH.DefaultUser
+		}
+		authType := h.AuthType
+		if authType == "" {
+			if h.Password != "" {
+				authType = "password"
+			} else {
+				authType = "key"
+			}
+		}
+		keyPath := h.KeyPath
+		if keyPath == "" && authType == "key" {
+			keyPath = cfg.SSH.DefaultKeyPath
+		}
+
+		sshPool.AddHost(ssh.HostInfo{
+			Name:     h.Name,
+			Host:     h.Host,
+			Port:     port,
+			User:     user,
+			Group:    h.Group,
+			Tags:     h.Tags,
+			AuthType: authType,
+			Password: h.Password,
+			KeyPath:  keyPath,
+		})
+		logger.Debug("加载主机配置", zap.String("name", h.Name), zap.String("host", h.Host))
+	}
+	if len(cfg.Hosts) > 0 {
+		logger.Info("从配置文件加载主机", zap.Int("count", len(cfg.Hosts)))
+	}
+
 	// 4. 初始化 Tool 注册中心
 	toolRegistry := tool.NewRegistry()
 
 	// 注册内置工具
 	getHostsFunc := func(group string) []builtin.HostBasicInfo {
-		// TODO: 从数据库获取主机列表
-		return []builtin.HostBasicInfo{}
+		poolHosts := sshPool.ListHosts()
+		hosts := make([]builtin.HostBasicInfo, 0, len(poolHosts))
+		for _, h := range poolHosts {
+			if group != "" && h.Group != group {
+				continue
+			}
+			hosts = append(hosts, builtin.HostBasicInfo{
+				Name:   h.Name,
+				Host:   h.Host,
+				Port:   h.Port,
+				User:   h.User,
+				Group:  h.Group,
+				Status: "unknown",
+			})
+		}
+		return hosts
 	}
 	if err := builtin.RegisterAll(toolRegistry, getHostsFunc); err != nil {
 		logger.Fatal("注册内置工具失败", zap.Error(err))
@@ -97,6 +158,8 @@ func main() {
 		Agent:        aiAgent,
 		ToolRegistry: toolRegistry,
 		SSHPool:      sshPool,
+		PolicyStore:  policyStore,
+		AuditLogger:  auditLogger,
 		Version:      Version,
 		Mode:         cfg.Server.Mode,
 	})

@@ -1,0 +1,21 @@
+name: check_nginx
+description: 检查 Nginx 服务状态
+path: scripts/check_nginx.sh
+timeout: 30
+enabled: true
+params:
+  - name: config_path
+    type: string
+    description: Nginx 配置文件路径
+    required: false
+    default: "/etc/nginx/nginx.conf"
+  - name: access_log
+    type: string
+    description: Nginx 访问日志路径
+    required: false
+    default: "/var/log/nginx/access.log"
+  - name: error_log
+    type: string
+    description: Nginx 错误日志路径
+    required: false
+    default: "/var/log/nginx/error.log"

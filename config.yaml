@@ -5,11 +5,11 @@ server:
   mode: debug  # debug / release
 
 llm:
-  endpoint: "http://localhost:11434/v1"
-  model: "qwen2.5:14b"
-  timeout: 60s
+  endpoint: "https://yibuapi.com/v1"
+  model: "qwen3-4b-thinking"
+  timeout: 120s
   max_tokens: 4096
-  # api_key: ""  # 可选，或通过环境变量 LLM_API_KEY 设置
+  api_key: ""
 
 ssh:
   default_timeout: 30s
@@ -19,6 +19,44 @@ ssh:
   keepalive_interval: 30s
   default_user: root
   default_key_path: ~/.ssh/id_rsa
+
+# 预定义主机列表
+# 如果当前节点可以 SSH 到其他节点，只需配置 IP 即可（使用默认用户和密钥）
+hosts:
+  # 示例：使用默认密钥认证（最简配置，只需 name 和 host）
+  # - name: node1
+  #   host: 192.168.1.10
+  #
+  # 示例：指定用户和端口
+  - name: 192.168.136.129
+    host: 192.168.136.129
+    port: 22
+    auth_type: password
+    user: hrp
+    password: ""
+  #
+  # 示例：使用密码认证
+  - name: node3
+    host: rui.vin 
+    user: root
+    auth_type: password
+    password: ""
+  #
+  # 示例：指定私钥路径
+  # - name: node4
+  #   host: 192.168.1.13
+  #   key_path: ~/.ssh/other_key
+  #
+  # 示例：带分组和标签
+  # - name: web-server-1
+  #   host: 192.168.1.20
+  #   group: production
+  #   tags: [web, nginx]
+  #
+  # - name: db-server-1
+  #   host: 192.168.1.30
+  #   group: production
+  #   tags: [database, mysql]
 
 database:
   driver: sqlite

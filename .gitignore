@@ -28,6 +28,8 @@ Thumbs.db
 # Data
 data/*.db
 data/*.sqlite
+data/command_policy.json
+data/command_audit.jsonl
 
 # Logs
 *.log

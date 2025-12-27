@@ -22,20 +22,20 @@ type StreamCallback func(chunk StreamChunk)
 
 // StreamChunk 流式数据块
 type StreamChunk struct {
-	Type      string     `json:"type"`                 // content, tool_call, done, error
-	Content   string     `json:"content,omitempty"`    // 文本内容
-	ToolCall  *ToolCall  `json:"tool_call,omitempty"`  // 工具调用
-	Error     string     `json:"error,omitempty"`      // 错误信息
-	FinishReason string  `json:"finish_reason,omitempty"` // 结束原因
+	Type         string    `json:"type"`                    // content, tool_call, done, error
+	Content      string    `json:"content,omitempty"`       // 文本内容
+	ToolCall     *ToolCall `json:"tool_call,omitempty"`     // 工具调用
+	Error        string    `json:"error,omitempty"`         // 错误信息
+	FinishReason string    `json:"finish_reason,omitempty"` // 结束原因
 }
 
 // Message 消息
 type Message struct {
-	Role       string     `json:"role"`                  // system, user, assistant, tool
-	Content    string     `json:"content"`               // 消息内容
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`  // 工具调用（assistant 消息）
+	Role       string     `json:"role"`                   // system, user, assistant, tool
+	Content    string     `json:"content"`                // 消息内容
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // 工具调用（assistant 消息）
 	ToolCallID string     `json:"tool_call_id,omitempty"` // 工具调用 ID（tool 消息）
-	Name       string     `json:"name,omitempty"`        // 工具名称（tool 消息）
+	Name       string     `json:"name,omitempty"`         // 工具名称（tool 消息）
 }
 
 // ToolCall 工具调用
@@ -66,11 +66,11 @@ type FunctionDef struct {
 
 // ChatResponse 对话响应
 type ChatResponse struct {
-	ID      string   `json:"id"`
-	Model   string   `json:"model"`
-	Message Message  `json:"message"`
-	Usage   Usage    `json:"usage"`
-	FinishReason string `json:"finish_reason"` // stop, tool_calls, length
+	ID           string  `json:"id"`
+	Model        string  `json:"model"`
+	Message      Message `json:"message"`
+	Usage        Usage   `json:"usage"`
+	FinishReason string  `json:"finish_reason"` // stop, tool_calls, length
 }
 
 // Usage token 使用量
