@@ -21,12 +21,12 @@ func TestQueryLogTool(t *testing.T) {
 		t.Error("Parameters 不应为空")
 	}
 
-	// 测试参数验证 - 缺少 host
+	// 测试参数验证 - 缺少 host 和 hosts
 	result, _ := qt.Execute(nil, map[string]interface{}{
 		"log_type": "nginx",
 	})
 	if result.Success {
-		t.Error("缺少 host 应该失败")
+		t.Error("缺少 host 和 hosts 应该失败")
 	}
 
 	// 测试参数验证 - 缺少 log_type
@@ -158,17 +158,36 @@ func TestRunCommandTool(t *testing.T) {
 		t.Errorf("Name 期望 run_command, 实际 %s", rt.Name())
 	}
 
-	// 测试缺少参数
-	result, _ := rt.Execute(nil, map[string]interface{}{})
+	// 测试缺少 host 和 hosts
+	result, _ := rt.Execute(nil, map[string]interface{}{
+		"command": "ls",
+	})
 	if result.Success {
-		t.Error("缺少参数应该失败")
+		t.Error("缺少 host 和 hosts 应该失败")
 	}
 
+	// 测试缺少 command
 	result, _ = rt.Execute(nil, map[string]interface{}{
 		"host": "test",
 	})
 	if result.Success {
 		t.Error("缺少 command 应该失败")
+	}
+
+	result, _ = rt.Execute(nil, map[string]interface{}{
+		"hosts": []string{"test"},
+	})
+	if result.Success {
+		t.Error("缺少 command 应该失败（使用 hosts）")
+	}
+
+	// 测试 SSH 上下文未初始化
+	result, _ = rt.Execute(nil, map[string]interface{}{
+		"host":    "test",
+		"command": "ls",
+	})
+	if result.Success {
+		t.Error("SSH 未初始化应该失败")
 	}
 }
 

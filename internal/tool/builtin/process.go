@@ -109,7 +109,8 @@ func (t *RunCommandTool) Description() string {
 	return `在指定节点上执行 Shell 命令。
 这是一个通用工具，当其他专用工具无法满足需求时使用。
 注意：危险命令会被拦截。
-适用场景：执行自定义命令、查看特定信息。`
+可以执行单个节点或批量执行多个节点。
+适用场景：执行自定义命令、查看特定信息、批量操作。`
 }
 
 func (t *RunCommandTool) Parameters() []tool.Parameter {
@@ -117,8 +118,14 @@ func (t *RunCommandTool) Parameters() []tool.Parameter {
 		{
 			Name:        "host",
 			Type:        "string",
-			Description: "目标节点名称",
-			Required:    true,
+			Description: "目标节点名称，不填则需要指定 hosts",
+			Required:    false,
+		},
+		{
+			Name:        "hosts",
+			Type:        "[]string",
+			Description: "多个目标节点名称",
+			Required:    false,
 		},
 		{
 			Name:        "command",
@@ -131,10 +138,11 @@ func (t *RunCommandTool) Parameters() []tool.Parameter {
 
 func (t *RunCommandTool) Execute(ctx *tool.Context, params map[string]interface{}) (*tool.Result, error) {
 	host := tool.GetStringParam(params, "host", "")
+	hosts := tool.GetStringSliceParam(params, "hosts")
 	command := tool.GetStringParam(params, "command", "")
 
-	if host == "" {
-		return tool.NewErrorResult("参数 host 不能为空"), nil
+	if host == "" && len(hosts) == 0 {
+		return tool.NewErrorResult("请指定 host 或 hosts 参数"), nil
 	}
 	if command == "" {
 		return tool.NewErrorResult("参数 command 不能为空"), nil
@@ -149,16 +157,43 @@ func (t *RunCommandTool) Execute(ctx *tool.Context, params map[string]interface{
 		return tool.NewErrorResult("SSH 上下文未初始化"), nil
 	}
 
-	output, err := ctx.SSH.Exec(host, command)
-	if err != nil {
-		return tool.NewErrorResult(fmt.Sprintf("执行失败: %v", err)), nil
+	if host != "" {
+		// 单节点执行
+		output, err := ctx.SSH.Exec(host, command)
+		if err != nil {
+			return tool.NewErrorResult(fmt.Sprintf("执行失败: %v", err)), nil
+		}
+
+		return tool.NewResult(map[string]interface{}{
+			"host":    host,
+			"command": command,
+			"output":  strings.TrimSpace(output),
+		}, fmt.Sprintf("成功在 %s 上执行命令", host)), nil
 	}
 
-	return tool.NewResult(map[string]interface{}{
-		"host":    host,
-		"command": command,
-		"output":  strings.TrimSpace(output),
-	}, fmt.Sprintf("成功在 %s 上执行命令", host)), nil
+	if len(hosts) > 0 {
+		// 多节点批量执行
+		results := ctx.SSH.BatchExec(hosts, command)
+		data := make([]map[string]interface{}, 0, len(results))
+		for _, result := range results {
+			item := map[string]interface{}{
+				"host":    result.Host,
+				"command": command,
+			}
+			if result.Error != nil {
+				item["error"] = result.Error.Error()
+				item["output"] = ""
+			} else {
+				item["output"] = strings.TrimSpace(result.Output)
+			}
+			item["elapsed"] = result.Elapsed.String()
+			data = append(data, item)
+		}
+
+		return tool.NewResult(data, fmt.Sprintf("成功在 %d 个节点上执行命令", len(hosts))), nil
+	}
+
+	return tool.NewErrorResult("未指定执行节点"), nil
 }
 
 // checkDangerousCommand 检查危险命令

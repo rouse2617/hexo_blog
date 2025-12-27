@@ -45,6 +45,7 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 	hostHandler := handler.NewHostHandler(cfg.SSHPool, cfg.HostRepo, cfg.GroupRepo)
 	toolHandler := handler.NewToolHandler(cfg.ToolRegistry, cfg.SSHPool, cfg.ConfigRepo)
 	systemHandler := handler.NewSystemHandler(cfg.Version, cfg.PolicyStore, cfg.AuditLogger, cfg.ConfigRepo)
+	operationsHandler := handler.NewOperationsHandler(cfg.ToolRegistry, cfg.SSHPool)
 
 	// API 路由组
 	api := r.Group("/api")
@@ -106,6 +107,12 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 			system.GET("/command-policy", systemHandler.GetCommandPolicy)
 			system.PUT("/command-policy", systemHandler.UpdateCommandPolicy)
 			system.GET("/audit/commands", systemHandler.GetCommandAudit)
+		}
+
+		// 批量操作 API
+		operations := api.Group("/operations")
+		{
+			operations.POST("/batch-execute", operationsHandler.BatchExecute)
 		}
 	}
 
