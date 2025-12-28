@@ -339,7 +339,19 @@ func (h *HostHandler) UpdateHost(c *gin.Context) {
 		KeyContent: req.PrivateKey,
 	})
 
-	SuccessWithMessage(c, "更新成功", nil)
+	// 返回更新后的主机信息
+	SuccessWithMessage(c, "更新成功", HostResponse{
+		ID:       existingHost.ID,
+		Name:     existingHost.Name,
+		Host:     existingHost.IP,
+		Port:     existingHost.Port,
+		User:     existingHost.User,
+		Username: existingHost.User,
+		Group:    existingHost.Group,
+		Tags:     existingHost.Tags,
+		AuthType: existingHost.AuthType,
+		Status:   existingHost.Status,
+	})
 }
 
 // DeleteHost 删除主机

@@ -3,13 +3,14 @@
 server:
   addr: ":8080"
   mode: debug  # debug / release
-
+ 
+ 
 llm:
-  endpoint: "https://yibuapi.com/v1"
-  model: "qwen3-4b-thinking"
+  endpoint: "https://alex-ewoeo-bigeowifo.hf.space/api/coding/paas/v4"
+  model: "glm-4.7"
   timeout: 120s
   max_tokens: 4096
-  api_key: "sk-DrzHNG3Avt6eTP2DndOwnIoW9V3vfgxYOEo6gh3jlkrgJFDB"
+  api_key: "A6uYVA1EosYnHrl0lT1r2u2IuEh1AHzAzn-knWY-Dws"
 
 ssh:
   default_timeout: 30s

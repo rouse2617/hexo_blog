@@ -126,12 +126,27 @@ export const useHostStore = defineStore('host', () => {
   // 更新主机
   async function editHost(id: string, data: Partial<Host>) {
     try {
-      const updated = normalizeHost(await updateHost(id, data))
-      const index = hosts.value.findIndex(h => h.id === id)
-      if (index !== -1) {
-        hosts.value[index] = updated
+      const response = await updateHost(id, data) as any
+      // Check if response contains valid host data (name and host fields)
+      if (response && typeof response === 'object' && 'name' in response && 'host' in response && response.name && response.host) {
+        // Response has valid host data
+        const updated = normalizeHost(response)
+        const index = hosts.value.findIndex(h => h.id === id)
+        if (index !== -1) {
+          hosts.value[index] = updated
+        }
+        return updated
+      } else {
+        // Response is just { code, message } without data
+        // Don't modify the hosts array - preserve existing data
+        const existing = hosts.value.find(h => h.id === id)
+        if (existing) {
+          // Update the existing host with the submitted data
+          Object.assign(existing, data)
+          return existing
+        }
+        return null
       }
-      return updated
     } catch (error) {
       console.error('更新主机失败:', error)
       throw error
