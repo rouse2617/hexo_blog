@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { ElNotification } from 'element-plus'
 import type { Message, ToolCall, ThinkingStatus, StreamEventType } from '@/api/chat'
 import { fetchStreamChat, getChatHistory, getSessions, createSession, deleteSession } from '@/api/chat'
 
@@ -39,6 +40,9 @@ export const useChatStore = defineStore('chat', () => {
 
   // 请求取消控制器
   let abortController: AbortController | null = null
+
+  // 会话切换锁 - 防止切换时发送消息
+  let isSwitchingSession = false
 
   // 加载会话列表
   async function loadSessions() {
@@ -80,12 +84,23 @@ export const useChatStore = defineStore('chat', () => {
 
   // 切换会话
   async function switchSession(sessionId: string) {
+    // 设置切换锁
+    isSwitchingSession = true
+
     // 取消正在进行的请求
     cancelCurrentRequest()
     currentSessionId.value = sessionId
     thinkingSteps.value = []
     currentThinkingStatus.value = null
-    await loadHistory(sessionId)
+
+    try {
+      await loadHistory(sessionId)
+    } finally {
+      // 等待下一个 tick 后释放锁，确保状态已更新
+      setTimeout(() => {
+        isSwitchingSession = false
+      }, 100)
+    }
   }
 
   // 加载历史消息
@@ -123,6 +138,13 @@ export const useChatStore = defineStore('chat', () => {
       console.log('[sendMessage] Skipped - empty or loading', { empty: !content.trim(), loading: isLoading.value })
       return
     }
+
+    // 检查是否正在切换会话
+    if (isSwitchingSession) {
+      console.log('[sendMessage] Skipped - session is switching')
+      return
+    }
+
     console.log('[sendMessage] Processing message')
 
     // 取消之前的请求
@@ -288,12 +310,25 @@ export const useChatStore = defineStore('chat', () => {
       // 忽略取消错误
       if (error.name === 'AbortError') {
         console.log('[sendMessage] Request was cancelled')
+        // 显示取消通知
+        ElNotification({
+          title: '请求已取消',
+          message: '当前请求已被取消',
+          type: 'info',
+          duration: 2000
+        })
         return
       }
       console.error('发送消息失败:', error)
       const lastMessage = messages.value[messages.value.length - 1]
       if (lastMessage.role === 'assistant') {
         lastMessage.content = '抱歉，发送消息时出现错误，请稍后重试。'
+        ElNotification({
+          title: '发送失败',
+          message: '发送消息时出现错误，请稍后重试',
+          type: 'error',
+          duration: 3000
+        })
       }
     } finally {
       isLoading.value = false

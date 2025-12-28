@@ -48,6 +48,7 @@ defineProps<{
 
 const emit = defineEmits<{
   send: [message: string]
+  success: []
   clear: []
 }>()
 
@@ -55,9 +56,18 @@ const inputText = ref('')
 
 const handleSend = () => {
   if (!inputText.value.trim()) return
-  emit('send', inputText.value)
+  const message = inputText.value
+  emit('send', message)
+}
+
+// 发送成功后清空输入框
+function clearInput() {
   inputText.value = ''
 }
+
+defineExpose({
+  clearInput
+})
 
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Enter' && !e.shiftKey) {

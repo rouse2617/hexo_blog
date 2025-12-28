@@ -1,26 +1,108 @@
 <template>
   <div class="hosts-page">
+    <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-left">
-        <el-input
-          v-model="keyword"
-          placeholder="搜索主机名称或地址"
-          :prefix-icon="Search"
-          clearable
-          style="width: 250px"
-          @input="handleSearch"
-        />
+        <h2 class="page-title">主机管理</h2>
+        <p class="page-description">管理您的服务器主机，支持批量操作</p>
       </div>
-      <div class="header-right">
+      <div class="header-actions">
         <el-button type="primary" :icon="Plus" @click="handleAdd">
           添加主机
         </el-button>
-        <el-button :icon="Upload" @click="showImport = true">
+      </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-icon online">
+          <el-icon><CircleCheck /></el-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ onlineCount }}</div>
+          <div class="stat-label">在线主机</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon offline">
+          <el-icon><CircleClose /></el-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ offlineCount }}</div>
+          <div class="stat-label">离线主机</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon warning">
+          <el-icon><Warning /></el-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ unknownCount }}</div>
+          <div class="stat-label">状态未知</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon info">
+          <el-icon><Monitor /></el-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ hostStore.total }}</div>
+          <div class="stat-label">总主机数</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 工具栏 -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <el-input
+          v-model="keyword"
+          placeholder="搜索主机名称、地址或标签..."
+          :prefix-icon="Search"
+          clearable
+          class="search-input"
+          @input="handleSearch"
+        />
+
+        <!-- 视图切换 -->
+        <el-radio-group v-model="viewMode" class="view-toggle">
+          <el-tooltip content="列表视图" placement="top">
+            <el-radio-button value="table">
+              <el-icon><List /></el-icon>
+            </el-radio-button>
+          </el-tooltip>
+          <el-tooltip content="卡片视图" placement="top">
+            <el-radio-button value="card">
+              <el-icon><Grid /></el-icon>
+            </el-radio-button>
+          </el-tooltip>
+        </el-radio-group>
+
+        <!-- 筛选器 -->
+        <el-select v-model="statusFilter" placeholder="状态" clearable>
+          <el-option label="全部" value="" />
+          <el-option label="在线" value="online" />
+          <el-option label="离线" value="offline" />
+          <el-option label="未知" value="unknown" />
+        </el-select>
+      </div>
+
+      <div class="toolbar-right">
+        <el-text v-if="selectedHosts.length > 0" type="info">
+          已选择 {{ selectedHosts.length }} 台主机
+        </el-text>
+        <el-button
+          v-if="selectedHosts.length > 0"
+          :icon="Upload"
+          @click="showImport = true"
+        >
           批量导入
         </el-button>
         <el-button
+          v-if="selectedHosts.length > 0"
           :icon="Delete"
-          :disabled="selectedHosts.length === 0"
+          type="danger"
           @click="handleBatchDelete"
         >
           批量删除
@@ -28,9 +110,11 @@
       </div>
     </div>
 
+    <!-- 内容区域 - 动态切换视图 -->
     <HostTable
-      :hosts="hostStore.hosts"
-      :total="hostStore.total"
+      v-if="viewMode === 'table'"
+      :hosts="filteredHosts"
+      :total="filteredTotal"
       :loading="hostStore.loading"
       @edit="handleEdit"
       @delete="handleDelete"
@@ -39,6 +123,19 @@
       @page-change="handlePageChange"
     />
 
+    <HostGrid
+      v-else
+      :hosts="filteredHosts"
+      :total="filteredTotal"
+      :loading="hostStore.loading"
+      @edit="handleEdit"
+      @delete="handleDelete"
+      @test="handleTest"
+      @selection-change="handleSelectionChange"
+      @page-change="handlePageChange"
+    />
+
+    <!-- 弹窗 -->
     <HostForm
       v-model:visible="showForm"
       :host="currentHost"
@@ -53,22 +150,62 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, Upload, Delete } from '@element-plus/icons-vue'
+import {
+  Search, Plus, Upload, Delete,
+  CircleCheck, CircleClose, Warning, Monitor,
+  List, Grid
+} from '@element-plus/icons-vue'
 import { useHostStore } from '@/stores/host'
 import type { Host } from '@/api/host'
 import HostTable from '@/components/host/HostTable.vue'
+import HostGrid from '@/components/host/HostGrid.vue'
 import HostForm from '@/components/host/HostForm.vue'
 import HostImport from '@/components/host/HostImport.vue'
 
 const hostStore = useHostStore()
 
 const keyword = ref('')
+const statusFilter = ref('')
+const viewMode = ref<'table' | 'card'>('table')
 const showForm = ref(false)
 const showImport = ref(false)
 const currentHost = ref<Host | null>(null)
 const selectedHosts = ref<Host[]>([])
+
+// 统计数据
+const onlineCount = computed(() =>
+  hostStore.hosts.filter(h => h.status === 'online').length
+)
+const offlineCount = computed(() =>
+  hostStore.hosts.filter(h => h.status === 'offline').length
+)
+const unknownCount = computed(() =>
+  hostStore.hosts.filter(h => !h.status || h.status === 'unknown').length
+)
+
+// 过滤后的主机
+const filteredHosts = computed(() => {
+  let hosts = hostStore.hosts
+
+  if (statusFilter.value) {
+    hosts = hosts.filter(h => h.status === statusFilter.value)
+  }
+
+  if (keyword.value) {
+    const kw = keyword.value.toLowerCase()
+    hosts = hosts.filter(h =>
+      h.name.toLowerCase().includes(kw) ||
+      h.host.toLowerCase().includes(kw) ||
+      (h.tags || []).some(tag => tag.toLowerCase().includes(kw))
+    )
+  }
+
+  return hosts
+})
+
+const filteredTotal = computed(() => filteredHosts.value.length)
 
 onMounted(() => {
   loadData()
@@ -181,21 +318,139 @@ const handleImportSubmit = async (hosts: Omit<Host, 'id' | 'createdAt' | 'update
 
 <style scoped>
 .hosts-page {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  align-items: flex-start;
 }
 
-.header-right {
+.page-title {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-gray-800);
+  margin: 0 0 var(--spacing-1) 0;
+}
+
+.page-description {
+  font-size: var(--text-sm);
+  color: var(--color-gray-500);
+  margin: 0;
+}
+
+.header-actions {
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-3);
+}
+
+/* 统计卡片 */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-4);
+}
+
+.stat-card {
+  background: #fff;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-5);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-gray-200);
+  transition: all var(--transition-fast);
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.stat-icon.online {
+  background: var(--badge-online-bg);
+  color: var(--badge-online-text);
+}
+
+.stat-icon.offline {
+  background: var(--badge-offline-bg);
+  color: var(--badge-offline-text);
+}
+
+.stat-icon.warning {
+  background: var(--color-warning-light);
+  color: var(--color-warning);
+}
+
+.stat-icon.info {
+  background: var(--color-info-light);
+  color: var(--color-info);
+}
+
+.stat-content {
+  flex: 1;
+}
+
+.stat-value {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-gray-800);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: var(--text-sm);
+  color: var(--color-gray-500);
+  margin-top: var(--spacing-2);
+}
+
+/* 工具栏 */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  padding: var(--spacing-4);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-gray-200);
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.search-input {
+  width: 280px;
+}
+
+.view-toggle :deep(.el-radio-button__inner) {
+  padding: 8px 12px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
 }
 </style>

@@ -146,14 +146,17 @@ const handleScroll = () => {
 // 监听消息变化，自动滚动
 watch(
   () => props.messages.length,
-  () => {
-    // 新消息时重置显示数量（如果之前加载了更多）
-    if (props.messages.length <= 50) {
-      displayCount.value = 50
-    }
-    // 只有在底部附近时才自动滚动
-    if (isNearBottom()) {
-      scrollToBottom()
+  (newLength, oldLength) => {
+    // 只有在消息数量增加时才自动滚动
+    if (newLength > (oldLength || 0)) {
+      // 新消息时，如果显示数量小于初始值则重置
+      if (displayCount.value < 50) {
+        displayCount.value = 50
+      }
+      // 只有在底部附近时才自动滚动
+      if (isNearBottom()) {
+        scrollToBottom()
+      }
     }
   }
 )

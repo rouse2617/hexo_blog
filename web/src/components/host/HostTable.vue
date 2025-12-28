@@ -26,9 +26,12 @@
       <el-table-column prop="username" label="用户名" width="120" />
       <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="getStatusType(row.status)" size="small">
-            {{ getStatusText(row.status) }}
-          </el-tag>
+          <div class="status-badge" :class="row.status || 'unknown'">
+            <el-icon class="status-icon">
+              <component :is="getStatusIcon(row.status)" />
+            </el-icon>
+            <span class="status-text">{{ getStatusText(row.status) }}</span>
+          </div>
         </template>
       </el-table-column>
       <el-table-column prop="tags" label="标签" min-width="150">
@@ -77,7 +80,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { Host } from '@/api/host'
-import { Monitor } from '@element-plus/icons-vue'
+import { Monitor, CircleCheck, CircleClose, WarningFilled } from '@element-plus/icons-vue'
 
 const props = defineProps<{
   hosts: Host[]
@@ -96,14 +99,14 @@ const emit = defineEmits<{
 const currentPage = ref(1)
 const pageSize = ref(10)
 
-const getStatusType = (status?: string) => {
+const getStatusIcon = (status?: string) => {
   switch (status) {
     case 'online':
-      return 'success'
+      return CircleCheck
     case 'offline':
-      return 'danger'
+      return CircleClose
     default:
-      return 'info'
+      return WarningFilled
   }
 }
 
@@ -135,7 +138,6 @@ const handleCurrentChange = (page: number) => {
 watch(
   () => props.total,
   () => {
-    // 如果当前页超出范围，重置到第一页
     const maxPage = Math.ceil(props.total / pageSize.value)
     if (currentPage.value > maxPage && maxPage > 0) {
       currentPage.value = 1
@@ -147,19 +149,60 @@ watch(
 <style scoped>
 .host-table {
   background: #fff;
-  border-radius: 8px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-gray-200);
+  overflow: hidden;
 }
 
 .host-name-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-2);
+}
+
+/* 状态徽章样式 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.status-badge.online {
+  background: var(--badge-online-bg);
+  color: var(--badge-online-text);
+  border: 1px solid var(--badge-online-border);
+}
+
+.status-badge.offline {
+  background: var(--badge-offline-bg);
+  color: var(--badge-offline-text);
+  border: 1px solid var(--badge-offline-border);
+}
+
+.status-badge.unknown {
+  background: var(--badge-unknown-bg);
+  color: var(--badge-unknown-text);
+  border: 1px solid var(--badge-unknown-border);
+}
+
+.status-icon {
+  font-size: 14px;
+}
+
+.status-text {
+  line-height: 1;
 }
 
 .table-footer {
   display: flex;
   justify-content: flex-end;
-  padding: 16px;
-  border-top: 1px solid #ebeef5;
+  padding: var(--spacing-4);
+  border-top: 1px solid var(--color-gray-200);
 }
 </style>

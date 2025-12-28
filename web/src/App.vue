@@ -1,16 +1,39 @@
 <template>
   <ErrorBoundary>
     <el-container class="app-container">
-      <el-aside width="220px" class="app-aside">
-        <AppSidebar />
+      <!-- 可折叠侧边栏 -->
+      <el-aside
+        :width="sidebarCollapsed ? '64px' : '220px'"
+        class="app-aside"
+        :class="{ collapsed: sidebarCollapsed }"
+      >
+        <AppSidebar :collapsed="sidebarCollapsed" />
       </el-aside>
+
       <el-container>
         <el-header class="app-header">
+          <!-- 侧边栏折叠按钮 -->
+          <el-button
+            :icon="sidebarCollapsed ? Expand : Fold"
+            text
+            @click="toggleSidebar"
+            class="collapse-btn"
+          />
           <AppHeader />
         </el-header>
+
+        <!-- 顶部进度条 -->
+        <div class="page-progress" v-if="isLoading">
+          <div class="progress-bar" :style="{ width: progress + '%' }"></div>
+        </div>
+
         <el-main class="app-main">
           <ErrorBoundary>
-            <router-view />
+            <router-view v-slot="{ Component }">
+              <transition name="fade" mode="out-in">
+                <component :is="Component" />
+              </transition>
+            </router-view>
           </ErrorBoundary>
         </el-main>
       </el-container>
@@ -19,66 +42,116 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { Expand, Fold } from '@element-plus/icons-vue'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 
-// 全局未捕获错误处理
-onMounted(() => {
-  // 处理未捕获的 Promise 错误
-  window.addEventListener('unhandledrejection', (event) => {
-    console.error('Unhandled Promise Rejection:', event.reason)
-    ElMessage.error('操作失败: ' + (event.reason?.message || '未知错误'))
-    event.preventDefault()
-  })
+const route = useRoute()
+const sidebarCollapsed = ref(false)
+const isLoading = ref(false)
+const progress = ref(0)
 
-  // 处理全局 JS 错误
-  window.addEventListener('error', (event) => {
-    console.error('Global Error:', event.error)
-    // 忽略资源加载错误
-    if (event.target && (event.target as HTMLElement).tagName) {
-      return
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+// 监听路由变化，显示进度
+watch(() => route.path, () => {
+  isLoading.value = true
+  progress.value = 0
+
+  const timer = setInterval(() => {
+    progress.value += 10
+    if (progress.value >= 90) {
+      clearInterval(timer)
     }
-    ElMessage.error('发生错误: ' + (event.error?.message || '未知错误'))
-  })
+  }, 50)
+
+  setTimeout(() => {
+    progress.value = 100
+    setTimeout(() => {
+      isLoading.value = false
+    }, 200)
+  }, 500)
 })
 </script>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* 侧边栏折叠动画 */
+.app-aside {
+  transition: width var(--transition-base);
 }
 
-html, body, #app {
+.app-aside.collapsed :deep(.sidebar-text) {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+/* 页面切换动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--transition-base), transform var(--transition-base);
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* 顶部进度条 */
+.page-progress {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  z-index: 1000;
+}
+
+.progress-bar {
   height: 100%;
-  width: 100%;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-light));
+  transition: width var(--transition-base);
 }
 
+/* 折叠按钮 */
+.collapse-btn {
+  margin-right: var(--spacing-3);
+}
+</style>
+
+<style scoped>
 .app-container {
   height: 100%;
 }
 
 .app-aside {
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-  border-right: 1px solid #2a2a4a;
+  background: linear-gradient(180deg, var(--sidebar-bg-start) 0%, var(--sidebar-bg-end) 100%);
+  border-right: 1px solid var(--sidebar-border);
 }
 
 .app-header {
   background: #fff;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--color-gray-200);
   display: flex;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 var(--spacing-5);
   height: 60px;
 }
 
 .app-main {
-  background: #f5f7fa;
-  padding: 20px;
+  background: var(--color-gray-50);
+  padding: var(--spacing-5);
   overflow-y: auto;
 }
 </style>

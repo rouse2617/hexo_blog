@@ -1,42 +1,60 @@
 <template>
   <div class="tool-card" :class="{ disabled: !tool.enabled }">
-    <div class="tool-header">
-      <div class="tool-icon">
-        <el-icon :size="24" :color="tool.enabled ? '#409eff' : '#c0c4cc'">
-          <component :is="getToolIcon(tool.type)" />
-        </el-icon>
-      </div>
-      <div class="tool-info">
-        <h3 class="tool-name">{{ tool.name }}</h3>
-        <el-tag :type="tool.type === 'builtin' ? 'primary' : 'success'" size="small">
-          {{ tool.type === 'builtin' ? '内置' : '脚本' }}
-        </el-tag>
+    <!-- 卡片头部 -->
+    <div class="card-header">
+      <div class="tool-identity">
+        <div class="tool-icon-wrapper" :class="{ disabled: !tool.enabled }">
+          <el-icon :size="24">
+            <component :is="getToolIcon(tool.type)" />
+          </el-icon>
+        </div>
+        <div class="tool-meta">
+          <h3 class="tool-name">{{ tool.name }}</h3>
+          <el-tag :type="tool.type === 'builtin' ? 'primary' : 'success'" size="small">
+            {{ tool.type === 'builtin' ? '内置' : '脚本' }}
+          </el-tag>
+        </div>
       </div>
       <el-switch
         :model-value="tool.enabled"
         @change="handleToggle"
         :loading="toggling"
+        size="large"
       />
     </div>
-    <div class="tool-body">
+
+    <!-- 卡片内容 -->
+    <div class="card-content">
       <p class="tool-description">{{ tool.description }}</p>
-      <div v-if="tool.parameters && tool.parameters.length > 0" class="tool-params">
-        <div class="params-title">参数列表</div>
-        <div class="params-list">
-          <div
-            v-for="param in tool.parameters"
-            :key="param.name"
-            class="param-item"
-          >
-            <span class="param-name">
-              {{ param.name }}
-              <span v-if="param.required" class="required">*</span>
-            </span>
-            <span class="param-type">{{ param.type }}</span>
-            <span class="param-desc">{{ param.description }}</span>
+
+      <!-- 参数列表 - 可折叠 -->
+      <el-collapse v-if="tool.parameters && tool.parameters.length > 0" class="params-collapse">
+        <el-collapse-item name="params">
+          <template #title>
+            <div class="params-title">
+              <el-icon><Document /></el-icon>
+              <span>参数列表</span>
+              <el-badge :value="tool.parameters.length" :max="99" />
+            </div>
+          </template>
+          <div class="params-list">
+            <div
+              v-for="param in tool.parameters"
+              :key="param.name"
+              class="param-item"
+            >
+              <div class="param-header">
+                <span class="param-name">
+                  {{ param.name }}
+                  <el-tag v-if="param.required" size="small" type="danger">必填</el-tag>
+                </span>
+                <el-tag size="small" type="info">{{ param.type }}</el-tag>
+              </div>
+              <div class="param-desc">{{ param.description }}</div>
+            </div>
           </div>
-        </div>
-      </div>
+        </el-collapse-item>
+      </el-collapse>
     </div>
   </div>
 </template>
@@ -65,7 +83,9 @@ const handleToggle = async (enabled: boolean) => {
   try {
     emit('toggle', props.tool.name, enabled)
   } finally {
-    toggling.value = false
+    setTimeout(() => {
+      toggling.value = false
+    }, 300)
   }
 }
 </script>
@@ -73,103 +93,148 @@ const handleToggle = async (enabled: boolean) => {
 <style scoped>
 .tool-card {
   background: #fff;
-  border-radius: 10px;
-  border: 1px solid #ebeef5;
-  padding: 20px;
-  transition: all 0.3s;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-gray-200);
+  overflow: hidden;
+  transition: all var(--transition-base);
 }
 
 .tool-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-xl);
+  transform: translateY(-4px);
+  border-color: var(--color-primary-light);
 }
 
 .tool-card.disabled {
   opacity: 0.6;
 }
 
-.tool-header {
+/* 卡片头部 */
+.card-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 15px;
+  padding: var(--spacing-5);
+  background: linear-gradient(to bottom, var(--color-gray-50), transparent);
+  border-bottom: 1px solid var(--color-gray-100);
 }
 
-.tool-icon {
-  width: 48px;
-  height: 48px;
-  background: #f5f7fa;
-  border-radius: 10px;
+.tool-identity {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.tool-info {
+  gap: var(--spacing-4);
   flex: 1;
 }
 
-.tool-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 6px;
+.tool-icon-wrapper {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #2563eb;
+  transition: all var(--transition-base);
 }
 
-.tool-body {
-  color: #606266;
+.tool-icon-wrapper.disabled {
+  background: var(--color-gray-200);
+  color: var(--color-gray-500);
+}
+
+.tool-card:hover .tool-icon-wrapper:not(.disabled) {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: white;
+  transform: rotate(5deg);
+}
+
+.tool-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.tool-name {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-gray-800);
+  margin: 0;
+}
+
+/* 卡片内容 */
+.card-content {
+  padding: var(--spacing-5);
 }
 
 .tool-description {
-  font-size: 14px;
-  line-height: 1.6;
-  margin: 0 0 15px;
+  font-size: var(--text-sm);
+  color: var(--color-gray-600);
+  line-height: var(--leading-relaxed);
+  margin: 0 0 var(--spacing-4) 0;
 }
 
-.tool-params {
-  background: #f8fafc;
-  border-radius: 6px;
-  padding: 12px;
+/* 参数折叠 */
+.params-collapse {
+  border: none;
+}
+
+.params-collapse :deep(.el-collapse-item__header) {
+  height: auto;
+  padding: 0;
+  border-bottom: none;
+  background: transparent;
 }
 
 .params-title {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: var(--text-sm);
+  color: var(--color-gray-500);
+  cursor: pointer;
+  padding: var(--spacing-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.params-title:hover {
+  background: var(--color-gray-100);
 }
 
 .params-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+  margin-top: var(--spacing-3);
 }
 
 .param-item {
   display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.param-header {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  justify-content: space-between;
+  gap: var(--spacing-2);
 }
 
 .param-name {
-  font-weight: 500;
-  color: #303133;
-  min-width: 100px;
-}
-
-.param-name .required {
-  color: #f56c6c;
-}
-
-.param-type {
-  background: #e4e7ed;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #606266;
+  font-weight: var(--font-medium);
+  color: var(--color-gray-800);
+  font-size: var(--text-sm);
 }
 
 .param-desc {
-  color: #909399;
-  flex: 1;
+  font-size: var(--text-xs);
+  color: var(--color-gray-500);
+  line-height: var(--leading-normal);
 }
 </style>
