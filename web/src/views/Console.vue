@@ -80,40 +80,38 @@
           <template #bottom>
             <div class="result-panel-wrapper">
               <!-- 有结果时显示标签页 -->
-              <div v-if="hasResults" class="results-container">
-                <el-tabs v-model="resultTab" class="result-tabs">
-                  <el-tab-pane name="overview" label="结果概览">
-                    <template #label>
-                      <div class="tab-label">
-                        <el-icon><DataBoard /></el-icon>
-                        <span>结果概览</span>
-                        <el-badge :value="resultCount" />
-                      </div>
-                    </template>
-                    <ResultOverview @view-detail="handleViewDetail" />
-                  </el-tab-pane>
+              <el-tabs v-if="hasResults" v-model="resultTab" class="result-tabs" key="result-tabs">
+                <el-tab-pane name="overview" label="结果概览">
+                  <template #label>
+                    <div class="tab-label">
+                      <el-icon><DataBoard /></el-icon>
+                      <span>结果概览</span>
+                      <el-badge :value="resultCount" />
+                    </div>
+                  </template>
+                  <ResultOverview @view-detail="handleViewDetail" />
+                </el-tab-pane>
 
-                  <el-tab-pane name="detail" label="详细结果">
-                    <template #label>
-                      <div class="tab-label">
-                        <el-icon><Document /></el-icon>
-                        <span>详细结果</span>
-                      </div>
-                    </template>
-                    <ResultDetail @retry="handleRetry" />
-                  </el-tab-pane>
+                <el-tab-pane name="detail" label="详细结果">
+                  <template #label>
+                    <div class="tab-label">
+                      <el-icon><Document /></el-icon>
+                      <span>详细结果</span>
+                    </div>
+                  </template>
+                  <ResultDetail @retry="handleRetry" />
+                </el-tab-pane>
 
-                  <el-tab-pane name="analysis" label="AI 分析">
-                    <template #label>
-                      <div class="tab-label">
-                        <el-icon><ChatDotRound /></el-icon>
-                        <span>AI 分析</span>
-                      </div>
-                    </template>
-                    <AIAnalysis />
-                  </el-tab-pane>
-                </el-tabs>
-              </div>
+                <el-tab-pane name="analysis" label="AI 分析">
+                  <template #label>
+                    <div class="tab-label">
+                      <el-icon><ChatDotRound /></el-icon>
+                      <span>AI 分析</span>
+                    </div>
+                  </template>
+                  <AIAnalysis />
+                </el-tab-pane>
+              </el-tabs>
 
               <!-- 空状态 - 优化版 -->
               <div v-else class="empty-state">
