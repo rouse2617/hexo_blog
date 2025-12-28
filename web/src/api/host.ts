@@ -7,8 +7,10 @@ export interface Host {
   port: number
   username: string
   group?: string
+  authType?: 'auto' | 'password' | 'key' | 'key_content'
   password?: string
   privateKey?: string
+  keyPath?: string
   description?: string
   tags?: string[]
   status?: 'online' | 'offline' | 'unknown'

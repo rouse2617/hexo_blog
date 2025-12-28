@@ -32,8 +32,9 @@ const (
 
 // AuthType 认证类型常量
 const (
-	AuthTypePassword  = "password"
-	AuthTypeKey       = "key"
+	AuthTypeAuto       = "auto"
+	AuthTypePassword   = "password"
+	AuthTypeKey        = "key"
 	AuthTypeKeyContent = "key_content"
 )
 

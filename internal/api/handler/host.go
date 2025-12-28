@@ -80,14 +80,8 @@ func (h *HostInfo) getAuthType() string {
 	if h.AuthType != "" {
 		return h.AuthType
 	}
-	// 根据是否有密码或私钥自动判断
-	if h.Password != "" {
-		return "password"
-	}
-	if h.PrivateKey != "" {
-		return "key_content"
-	}
-	return "key"
+	// 默认使用 auto 模式，自动尝试所有认证方式
+	return "auto"
 }
 
 // ListHosts 获取主机列表

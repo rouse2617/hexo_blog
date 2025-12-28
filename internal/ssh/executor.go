@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	"go.uber.org/zap"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 var commandPolicyStore *security.PolicyStore
@@ -35,7 +37,7 @@ type HostInfo struct {
 	User       string   // 用户名
 	Group      string   // 分组
 	Tags       []string // 标签
-	AuthType   string   // 认证类型: password / key / key_content
+	AuthType   string   // 认证类型: auto / password / key / key_content
 	Password   string   // 密码
 	KeyPath    string   // 密钥路径
 	KeyContent string   // 密钥内容（直接传入）
@@ -165,54 +167,19 @@ func (p *Pool) getConnection(name string) (*ssh.Client, error) {
 
 // createConnection 创建 SSH 连接
 func (p *Pool) createConnection(name string, info HostInfo) (*ssh.Client, error) {
-	var authMethods []ssh.AuthMethod
-
-	switch info.AuthType {
-	case "password":
-		authMethods = append(authMethods, ssh.Password(info.Password))
-	case "key_content":
-		// 直接使用传入的私钥内容
-		if info.KeyContent == "" {
-			return nil, fmt.Errorf("私钥内容为空")
-		}
-		signer, err := ssh.ParsePrivateKey([]byte(info.KeyContent))
+	// 如果是 auto 模式，尝试所有认证方式
+	if info.AuthType == "auto" || info.AuthType == "" {
+		client, err := p.tryAllAuthMethods(name, info)
 		if err != nil {
-			return nil, fmt.Errorf("解析私钥失败: %w", err)
+			return nil, err
 		}
-		authMethods = append(authMethods, ssh.PublicKeys(signer))
-	case "key", "":
-		// 从文件读取密钥
-		keyPath := info.KeyPath
-		home, homeErr := os.UserHomeDir()
-		if keyPath == "" {
-			if homeErr != nil || home == "" {
-				return nil, fmt.Errorf("未配置 key_path 且无法确定用户主目录，请改用 password 认证或显式指定 key_path")
-			}
-			keyPath = filepath.Join(home, ".ssh", "id_rsa")
-		}
-		// 展开 ~ 路径（使用当前运行用户的 home，而不是依赖 $HOME 环境变量）
-		if strings.HasPrefix(keyPath, "~") {
-			if homeErr != nil || home == "" {
-				return nil, fmt.Errorf("展开密钥路径失败（无法确定用户主目录），请显式指定 key_path")
-			}
-			keyPath = strings.Replace(keyPath, "~", home, 1)
-		}
-		if _, err := os.Stat(keyPath); err != nil {
-			return nil, fmt.Errorf("读取密钥文件失败: %w（请检查 key_path 或改用 password 认证）", err)
-		}
+		return client, nil
+	}
 
-		key, err := os.ReadFile(keyPath)
-		if err != nil {
-			return nil, fmt.Errorf("读取密钥文件失败: %w（请检查 key_path 或改用 password 认证）", err)
-		}
-
-		signer, err := ssh.ParsePrivateKey(key)
-		if err != nil {
-			return nil, fmt.Errorf("解析密钥失败: %w", err)
-		}
-		authMethods = append(authMethods, ssh.PublicKeys(signer))
-	default:
-		return nil, fmt.Errorf("不支持的认证类型: %s", info.AuthType)
+	// 显式指定的认证方式
+	authMethods, err := p.getAuthMethods(info)
+	if err != nil {
+		return nil, err
 	}
 
 	config := &ssh.ClientConfig{
@@ -230,7 +197,6 @@ func (p *Pool) createConnection(name string, info HostInfo) (*ssh.Client, error)
 
 	// 保存连接
 	p.mu.Lock()
-	// 关闭旧连接
 	if oldConn, ok := p.connections[name]; ok {
 		oldConn.Close()
 	}
@@ -238,6 +204,247 @@ func (p *Pool) createConnection(name string, info HostInfo) (*ssh.Client, error)
 	p.mu.Unlock()
 
 	return client, nil
+}
+
+// tryAllAuthMethods 尝试所有可用的认证方式（auto 模式）
+func (p *Pool) tryAllAuthMethods(name string, info HostInfo) (*ssh.Client, error) {
+	// 定义尝试顺序：SSH Agent -> 密码 -> 私钥文件
+	attempts := []struct {
+		name string
+		fn   func() (*ssh.Client, error)
+	}{
+		{"SSH Agent", func() (*ssh.Client, error) {
+			return p.trySSHAgent(name, info)
+		}},
+		{"私钥文件", func() (*ssh.Client, error) {
+			return p.tryKeyFiles(name, info)
+		}},
+		{"密码", func() (*ssh.Client, error) {
+			if info.Password == "" {
+				return nil, fmt.Errorf("未配置密码")
+			}
+			authMethods := []ssh.AuthMethod{ssh.Password(info.Password)}
+			return p.connectWithAuth(name, info, authMethods)
+		}},
+	}
+
+	var lastErr error
+	for _, attempt := range attempts {
+		client, err := attempt.fn()
+		if err == nil {
+			logger.Info("认证成功", zap.String("host", info.Host), zap.String("method", attempt.name))
+			return client, nil
+		}
+		lastErr = err
+		logger.Debug("认证方式失败", zap.String("host", info.Host), zap.String("method", attempt.name), zap.Error(err))
+	}
+
+	return nil, fmt.Errorf("所有认证方式均失败: %w", lastErr)
+}
+
+// trySSHAgent 尝试使用 SSH Agent 认证
+func (p *Pool) trySSHAgent(name string, info HostInfo) (*ssh.Client, error) {
+	// 尝试连接到 SSH Agent
+	sshAgentSock := os.Getenv("SSH_AUTH_SOCK")
+	if sshAgentSock == "" {
+		return nil, fmt.Errorf("SSH_AUTH_SOCK 环境变量未设置")
+	}
+
+	conn, err := net.Dial("unix", sshAgentSock)
+	if err != nil {
+		return nil, fmt.Errorf("连接 SSH Agent 失败: %w", err)
+	}
+
+	agentClient := agent.NewClient(conn)
+	signers, err := agentClient.Signers()
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("从 Agent 获取签名者失败: %w", err)
+	}
+
+	if len(signers) == 0 {
+		conn.Close()
+		return nil, fmt.Errorf("SSH Agent 中没有可用的密钥")
+	}
+
+	// 使用第一个可用的签名者
+	authMethods := []ssh.AuthMethod{ssh.PublicKeys(signers[0])}
+	client, err := p.connectWithAuth(name, info, authMethods)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	// 保存连接以便后续关闭
+	return client, nil
+}
+
+// tryKeyFiles 尝试使用常见的私钥文件
+func (p *Pool) tryKeyFiles(name string, info HostInfo) (*ssh.Client, error) {
+	home, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		return nil, fmt.Errorf("无法确定用户主目录")
+	}
+
+	// 定义要尝试的私钥文件列表（按优先级）
+	keyFiles := []string{}
+
+	// 如果指定了 KeyPath，优先使用
+	if info.KeyPath != "" {
+		keyPath := info.KeyPath
+		if strings.HasPrefix(keyPath, "~") {
+			keyPath = strings.Replace(keyPath, "~", home, 1)
+		}
+		keyFiles = append(keyFiles, keyPath)
+	}
+
+	// 默认私钥文件列表（按常见优先级）
+	defaultKeys := []string{
+		"id_rsa",      // 最常见的 RSA 密钥
+		"id_ed25519",  // Ed25519 密钥（更安全，推荐）
+		"id_ecdsa",    // ECDSA 密钥
+		"id_ecdsa_sk", // 支持 U2F/FIDO2 的 ECDSA 密钥
+		"id_ed25519_sk", // 支持 U2F/FIDO2 的 Ed25519 密钥
+		"id_dsa",      // 旧的 DSA 密钥（不推荐）
+	}
+
+	sshDir := filepath.Join(home, ".ssh")
+	for _, key := range defaultKeys {
+		keyFiles = append(keyFiles, filepath.Join(sshDir, key))
+	}
+
+	// 尝试每个私钥文件
+	var lastErr error
+	for _, keyPath := range keyFiles {
+		if _, err := os.Stat(keyPath); err != nil {
+			continue // 文件不存在，跳过
+		}
+
+		key, err := os.ReadFile(keyPath)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			// 尝试解析带密码的私钥
+			if _, ok := err.(*ssh.PassphraseMissingError); ok {
+				logger.Debug("私钥需要密码", zap.String("key", keyPath))
+				lastErr = fmt.Errorf("私钥 %s 需要密码，请使用 key_content 并提供密码", keyPath)
+				continue
+			}
+			lastErr = err
+			continue
+		}
+
+		authMethods := []ssh.AuthMethod{ssh.PublicKeys(signer)}
+		client, err := p.connectWithAuth(name, info, authMethods)
+		if err == nil {
+			logger.Info("使用私钥认证成功", zap.String("host", info.Host), zap.String("key", keyPath))
+			return client, nil
+		}
+		lastErr = err
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("尝试所有私钥文件均失败: %w", lastErr)
+	}
+	return nil, fmt.Errorf("没有找到可用的私钥文件")
+}
+
+// connectWithAuth 使用指定的认证方法创建连接
+func (p *Pool) connectWithAuth(name string, info HostInfo, authMethods []ssh.AuthMethod) (*ssh.Client, error) {
+	if len(authMethods) == 0 {
+		return nil, fmt.Errorf("没有可用的认证方法")
+	}
+
+	config := &ssh.ClientConfig{
+		User:            info.User,
+		Auth:            authMethods,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         p.config.ConnectTimeout,
+	}
+
+	addr := fmt.Sprintf("%s:%d", info.Host, info.Port)
+	client, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		return nil, fmt.Errorf("连接失败: %w", err)
+	}
+
+	// 保存连接
+	p.mu.Lock()
+	if oldConn, ok := p.connections[name]; ok {
+		oldConn.Close()
+	}
+	p.connections[name] = client
+	p.mu.Unlock()
+
+	return client, nil
+}
+
+// getAuthMethods 根据认证类型获取认证方法
+func (p *Pool) getAuthMethods(info HostInfo) ([]ssh.AuthMethod, error) {
+	switch info.AuthType {
+	case "password":
+		if info.Password == "" {
+			return nil, fmt.Errorf("密码认证需要提供密码")
+		}
+		return []ssh.AuthMethod{ssh.Password(info.Password)}, nil
+
+	case "key_content", "key":
+		var keyBytes []byte
+		var err error
+
+		if info.AuthType == "key_content" {
+			// 直接使用传入的私钥内容
+			if info.KeyContent == "" {
+				return nil, fmt.Errorf("私钥内容为空")
+			}
+			keyBytes = []byte(info.KeyContent)
+		} else {
+			// 从文件读取私钥
+			keyPath := info.KeyPath
+			home, homeErr := os.UserHomeDir()
+
+			if keyPath == "" {
+				if homeErr != nil || home == "" {
+					return nil, fmt.Errorf("未配置 key_path 且无法确定用户主目录")
+				}
+				keyPath = filepath.Join(home, ".ssh", "id_rsa")
+			}
+
+			// 展开 ~ 路径
+			if strings.HasPrefix(keyPath, "~") {
+				if homeErr != nil || home == "" {
+					return nil, fmt.Errorf("展开密钥路径失败（无法确定用户主目录）")
+				}
+				keyPath = strings.Replace(keyPath, "~", home, 1)
+			}
+
+			if _, err := os.Stat(keyPath); err != nil {
+				return nil, fmt.Errorf("读取密钥文件失败: %w", err)
+			}
+
+			keyBytes, err = os.ReadFile(keyPath)
+			if err != nil {
+				return nil, fmt.Errorf("读取密钥文件失败: %w", err)
+			}
+		}
+
+		signer, err := ssh.ParsePrivateKey(keyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("解析私钥失败: %w", err)
+		}
+		return []ssh.AuthMethod{ssh.PublicKeys(signer)}, nil
+
+	case "agent":
+		// SSH Agent 模式需要单独处理
+		return nil, fmt.Errorf("agent 模式请使用 auto 模式，系统会自动检测并使用 SSH Agent")
+
+	default:
+		return nil, fmt.Errorf("不支持的认证类型: %s", info.AuthType)
+	}
 }
 
 // isAlive 检查连接是否有效
