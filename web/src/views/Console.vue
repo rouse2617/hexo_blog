@@ -82,7 +82,7 @@
               <!-- 有结果时显示标签页 -->
               <div v-if="hasResults" class="results-container">
                 <el-tabs v-model="resultTab" class="result-tabs">
-                  <el-tab-pane name="overview">
+                  <el-tab-pane name="overview" label="结果概览">
                     <template #label>
                       <div class="tab-label">
                         <el-icon><DataBoard /></el-icon>
@@ -93,7 +93,7 @@
                     <ResultOverview @view-detail="handleViewDetail" />
                   </el-tab-pane>
 
-                  <el-tab-pane name="detail">
+                  <el-tab-pane name="detail" label="详细结果">
                     <template #label>
                       <div class="tab-label">
                         <el-icon><Document /></el-icon>
@@ -103,7 +103,7 @@
                     <ResultDetail @retry="handleRetry" />
                   </el-tab-pane>
 
-                  <el-tab-pane name="analysis">
+                  <el-tab-pane name="analysis" label="AI 分析">
                     <template #label>
                       <div class="tab-label">
                         <el-icon><ChatDotRound /></el-icon>
