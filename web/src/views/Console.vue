@@ -79,39 +79,9 @@
 
           <template #bottom>
             <div class="result-panel-wrapper">
-              <!-- 有结果时显示标签页 -->
-              <el-tabs v-if="hasResults" v-model="resultTab" class="result-tabs" key="result-tabs">
-                <el-tab-pane name="overview" label="结果概览">
-                  <template #label>
-                    <div class="tab-label">
-                      <el-icon><DataBoard /></el-icon>
-                      <span>结果概览</span>
-                      <el-badge :value="resultCount" />
-                    </div>
-                  </template>
-                  <ResultOverview @view-detail="handleViewDetail" />
-                </el-tab-pane>
-
-                <el-tab-pane name="detail" label="详细结果">
-                  <template #label>
-                    <div class="tab-label">
-                      <el-icon><Document /></el-icon>
-                      <span>详细结果</span>
-                    </div>
-                  </template>
-                  <ResultDetail @retry="handleRetry" />
-                </el-tab-pane>
-
-                <el-tab-pane name="analysis" label="AI 分析">
-                  <template #label>
-                    <div class="tab-label">
-                      <el-icon><ChatDotRound /></el-icon>
-                      <span>AI 分析</span>
-                    </div>
-                  </template>
-                  <AIAnalysis />
-                </el-tab-pane>
-
+              <!-- 标签页 - 存储监控始终可用 -->
+              <el-tabs v-model="resultTab" class="result-tabs" key="result-tabs">
+                <!-- 存储监控 - 始终可用 -->
                 <el-tab-pane name="storage" label="存储监控">
                   <template #label>
                     <div class="tab-label">
@@ -121,32 +91,74 @@
                   </template>
                   <StorageMonitor />
                 </el-tab-pane>
-              </el-tabs>
 
-              <!-- 空状态 - 优化版 -->
-              <div v-else class="empty-state">
-                <div class="empty-illustration">
-                  <el-icon :size="64" color="#d1d5db"><Operation /></el-icon>
-                </div>
-                <h3 class="empty-title">选择主机并执行操作</h3>
-                <p class="empty-description">
-                  在左侧选择目标主机，配置操作参数，点击执行按钮查看结果
-                </p>
-                <div class="empty-tips">
-                  <div class="tip-item">
-                    <el-icon><Check /></el-icon>
-                    <span>支持批量查看日志、执行命令</span>
+                <!-- 有结果时显示的其他标签页 -->
+                <template v-if="hasResults">
+                  <el-tab-pane name="overview" label="结果概览">
+                    <template #label>
+                      <div class="tab-label">
+                        <el-icon><DataBoard /></el-icon>
+                        <span>结果概览</span>
+                        <el-badge :value="resultCount" />
+                      </div>
+                    </template>
+                    <ResultOverview @view-detail="handleViewDetail" />
+                  </el-tab-pane>
+
+                  <el-tab-pane name="detail" label="详细结果">
+                    <template #label>
+                      <div class="tab-label">
+                        <el-icon><Document /></el-icon>
+                        <span>详细结果</span>
+                      </div>
+                    </template>
+                    <ResultDetail @retry="handleRetry" />
+                  </el-tab-pane>
+
+                  <el-tab-pane name="analysis" label="AI 分析">
+                    <template #label>
+                      <div class="tab-label">
+                        <el-icon><ChatDotRound /></el-icon>
+                        <span>AI 分析</span>
+                      </div>
+                    </template>
+                    <AIAnalysis />
+                  </el-tab-pane>
+                </template>
+
+                <!-- 无结果时显示提示 -->
+                <el-tab-pane v-else name="empty" label="等待操作">
+                  <template #label>
+                    <div class="tab-label tab-label-disabled">
+                      <el-icon><Operation /></el-icon>
+                      <span>等待操作</span>
+                    </div>
+                  </template>
+                  <div class="empty-state">
+                    <div class="empty-illustration">
+                      <el-icon :size="64" color="#d1d5db"><Operation /></el-icon>
+                    </div>
+                    <h3 class="empty-title">选择主机并执行操作</h3>
+                    <p class="empty-description">
+                      在左侧选择目标主机，配置操作参数，点击执行按钮查看结果
+                    </p>
+                    <div class="empty-tips">
+                      <div class="tip-item">
+                        <el-icon><Check /></el-icon>
+                        <span>支持批量查看日志、执行命令</span>
+                      </div>
+                      <div class="tip-item">
+                        <el-icon><Check /></el-icon>
+                        <span>AI 智能分析执行结果</span>
+                      </div>
+                      <div class="tip-item">
+                        <el-icon><Check /></el-icon>
+                        <span>失败操作支持一键重试</span>
+                      </div>
+                    </div>
                   </div>
-                  <div class="tip-item">
-                    <el-icon><Check /></el-icon>
-                    <span>AI 智能分析执行结果</span>
-                  </div>
-                  <div class="tip-item">
-                    <el-icon><Check /></el-icon>
-                    <span>失败操作支持一键重试</span>
-                  </div>
-                </div>
-              </div>
+                </el-tab-pane>
+              </el-tabs>
             </div>
           </template>
         </ResizableVerticalPanels>
@@ -156,7 +168,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   DataBoard, Document, ChatDotRound, Operation,
@@ -177,7 +189,7 @@ import type { BatchExecuteResult } from '@/api/operations'
 const consoleStore = useConsoleStore()
 const hostStore = useHostStore()
 
-const resultTab = ref('overview')
+const resultTab = ref('storage')
 
 const hasResults = computed(() => consoleStore.executionResults.length > 0)
 const selectedCount = computed(() => consoleStore.selectedHosts.length)
@@ -227,6 +239,15 @@ const handleRetry = async (result: BatchExecuteResult) => {
     ElMessage.error(error.message || '重试失败')
   }
 }
+
+// 监听结果变化，自动切换标签
+watch(hasResults, (has) => {
+  if (has && resultTab.value === 'empty') {
+    resultTab.value = 'overview'
+  } else if (!has && resultTab.value !== 'storage') {
+    resultTab.value = 'storage'
+  }
+})
 </script>
 
 <style scoped>
@@ -396,6 +417,11 @@ const handleRetry = async (result: BatchExecuteResult) => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
+}
+
+.tab-label-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* 空状态 - 优化版 */
