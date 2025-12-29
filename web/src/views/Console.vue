@@ -111,6 +111,16 @@
                   </template>
                   <AIAnalysis />
                 </el-tab-pane>
+
+                <el-tab-pane name="storage" label="存储监控">
+                  <template #label>
+                    <div class="tab-label">
+                      <el-icon><FolderOpened /></el-icon>
+                      <span>存储监控</span>
+                    </div>
+                  </template>
+                  <StorageMonitor />
+                </el-tab-pane>
               </el-tabs>
 
               <!-- 空状态 - 优化版 -->
@@ -150,13 +160,14 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   DataBoard, Document, ChatDotRound, Operation,
-  Check
+  Check, FolderOpened
 } from '@element-plus/icons-vue'
 import HostTree from '@/components/console/HostTree.vue'
 import OperationPanel from '@/components/console/OperationPanel.vue'
 import ResultOverview from '@/components/console/ResultOverview.vue'
 import ResultDetail from '@/components/console/ResultDetail.vue'
 import AIAnalysis from '@/components/console/AIAnalysis.vue'
+import StorageMonitor from '@/components/console/StorageMonitor.vue'
 import ResizablePanels from '@/components/common/ResizablePanels.vue'
 import ResizableVerticalPanels from '@/components/common/ResizableVerticalPanels.vue'
 import { useConsoleStore } from '@/stores/console'

@@ -16,7 +16,7 @@ export const useConsoleStore = defineStore('console', () => {
   const executing = ref(false)
   
   // 当前操作类型
-  const currentOperation = ref<'query_log' | 'run_command' | 'check_cpu' | 'check_memory' | 'check_disk' | 'check_process' | null>(null)
+  const currentOperation = ref<'query_log' | 'run_command' | 'check_cpu' | 'check_memory' | 'check_disk' | 'check_process' | 'check_filesystem' | 'check_raid' | 'check_lvm' | 'check_io' | null>(null)
   
   // 当前操作参数
   const operationParams = ref<Record<string, any>>({})
@@ -42,7 +42,7 @@ export const useConsoleStore = defineStore('console', () => {
 
   // 执行批量操作
   async function executeOperation(
-    operation: 'query_log' | 'run_command' | 'check_cpu' | 'check_memory' | 'check_disk' | 'check_process',
+    operation: 'query_log' | 'run_command' | 'check_cpu' | 'check_memory' | 'check_disk' | 'check_process' | 'check_filesystem' | 'check_raid' | 'check_lvm' | 'check_io',
     hosts: string[],
     params?: Record<string, any>
   ) {
@@ -140,6 +140,11 @@ export const useConsoleStore = defineStore('console', () => {
     analyzeExecutionResults,
     loadAnalysisHistory,
     setCurrentAnalysis
+  }
+}, {
+  persist: {
+    key: 'ai-pro-console',
+    paths: ['selectedHosts']
   }
 })
 

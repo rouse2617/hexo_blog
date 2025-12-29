@@ -1,7 +1,7 @@
 import { request } from './request'
 
 export interface BatchExecuteRequest {
-  operation: 'query_log' | 'run_command' | 'check_cpu' | 'check_memory' | 'check_disk' | 'check_process'
+  operation: 'query_log' | 'run_command' | 'check_cpu' | 'check_memory' | 'check_disk' | 'check_process' | 'check_filesystem' | 'check_raid' | 'check_lvm' | 'check_io'
   hosts: string[]
   params?: Record<string, any>
 }
