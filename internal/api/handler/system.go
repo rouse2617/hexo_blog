@@ -2,7 +2,6 @@ package handler
 
 import (
 	"fmt"
-	"net/http"
 	"runtime"
 	"strconv"
 	"strings"
@@ -170,7 +169,7 @@ func (h *SystemHandler) UpdateCommandPolicy(c *gin.Context) {
 		return
 	}
 	if err := h.policy.Set(req); err != nil {
-		c.JSON(http.StatusOK, Response{Code: CodeInternalError, Message: "保存失败: " + err.Error()})
+		InternalError(c, "保存失败: "+err.Error())
 		return
 	}
 	SuccessWithMessage(c, "保存成功", h.policy.Get())

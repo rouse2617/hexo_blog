@@ -47,6 +47,12 @@ const routes: RouteRecordRaw[] = [
     name: 'Console',
     component: () => import('@/views/Console.vue'),
     meta: { title: '控制台' }
+  },
+  {
+    path: '/ops',
+    name: 'OpsConsole',
+    component: () => import('@/views/OpsConsoleCompact.vue'),
+    meta: { title: '运维控制台' }
   }
 ]
 

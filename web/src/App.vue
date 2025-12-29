@@ -48,15 +48,15 @@ import { Expand, Fold } from '@element-plus/icons-vue'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppSidebar from '@/components/common/AppSidebar.vue'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
+import { useAppStore } from '@/stores/app'
 
 const route = useRoute()
-const sidebarCollapsed = ref(false)
+const appStore = useAppStore()
+
+const { sidebarCollapsed, toggleSidebar } = appStore
+
 const isLoading = ref(false)
 const progress = ref(0)
-
-const toggleSidebar = () => {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-}
 
 // 监听路由变化，显示进度
 watch(() => route.path, () => {

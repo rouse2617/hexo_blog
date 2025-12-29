@@ -1,10 +1,25 @@
 <template>
-  <div class="message-list" ref="listRef">
-    <div v-if="messages.length === 0" class="empty-state">
-      <el-icon :size="64" color="#c0c4cc"><ChatDotRound /></el-icon>
-      <p class="empty-title">开始新的对话</p>
-      <p class="empty-desc">输入您的问题，AI 助手将为您提供帮助</p>
+  <div class="message-list-container">
+    <!-- 空状态 - 显示智能推荐 -->
+    <div v-if="messages.length === 0" class="empty-state-with-suggestions">
+      <div class="empty-state">
+        <el-icon :size="64" color="#c0c4cc"><ChatDotRound /></el-icon>
+        <p class="empty-title">开始新的对话</p>
+        <p class="empty-desc">输入您的问题，AI 助手将为您提供帮助</p>
+      </div>
+
+      <!-- 智能推荐（空状态时显示） -->
+      <SmartSuggestions
+        v-if="chatStore.showSuggestions"
+        :current-context="getContextFromMessages()"
+        @select="handleSuggestionSelect"
+      />
+
+      <!-- 快速命令 -->
+      <QuickCommands @select="handleCommandSelect" />
     </div>
+
+    <!-- 虚拟滚动列表 -->
     <template v-else>
       <!-- 加载更多历史消息按钮 -->
       <div v-if="hasMoreMessages" class="load-more">
@@ -17,13 +32,28 @@
         </el-button>
       </div>
 
-      <!-- 消息列表 -->
-      <MessageItem
-        v-for="(message, index) in visibleMessages"
-        :key="message.timestamp || index"
-        :message="message"
-        :ref="el => setMessageRef(el, index)"
-      />
+      <div class="message-scroller" ref="messageListRef" @scroll="handleScroll">
+        <div
+          v-for="(message, index) in visibleMessages"
+          :key="getMessageKey(message, index)"
+          class="message-item-wrapper"
+        >
+          <!-- 增强版消息组件 -->
+          <MessageItemEnhanced
+            :message="message"
+            :is-loading="isLoading && index === visibleMessages.length - 1"
+            :ref="el => setMessageRef(el, index)"
+            @copy="handleCopy"
+            @regenerate="handleRegenerate"
+            @continue="handleContinue"
+            @feedback="handleFeedback"
+            @export="handleExport"
+            @share="handleShare"
+            @toolRerun="handleToolRerun"
+            @followUp="handleFollowUp"
+          />
+        </div>
+      </div>
     </template>
 
     <!-- 思考过程展示 -->
@@ -54,8 +84,12 @@ import type { Message } from '@/api/chat'
 import type { ThinkingStep } from '@/stores/chat'
 import type { ThinkingStatus } from '@/api/chat'
 import { ChatDotRound, Loading, ArrowDown } from '@element-plus/icons-vue'
-import MessageItem from './MessageItem.vue'
+import { ElMessage } from 'element-plus'
+import MessageItemEnhanced from './MessageItemEnhanced.vue'
 import ThinkingProcess from './ThinkingProcess.vue'
+import SmartSuggestions from './SmartSuggestions.vue'
+import QuickCommands from './QuickCommands.vue'
+import { useChatStore } from '@/stores/chat'
 
 const props = withDefaults(defineProps<{
   messages: Message[]
@@ -67,12 +101,24 @@ const props = withDefaults(defineProps<{
   currentThinkingStatus: null
 })
 
-const listRef = ref<HTMLElement | null>(null)
+const emit = defineEmits<{
+  sendMessage: [content: string]
+  regenerate: [message: Message]
+  toolRerun: [toolCall: any]
+}>()
+
+const chatStore = useChatStore()
+const messageListRef = ref<HTMLElement | null>(null)
 const messageRefs = ref<Map<number, any>>(new Map())
 const showScrollButton = ref(false)
 const loadingMore = ref(false)
 const displayCount = ref(50) // 初始显示的消息数量
 const BATCH_SIZE = 30 // 每次加载更多的数量
+
+// 生成消息的唯一 key（解决 timestamp 重复问题）
+const getMessageKey = (message: Message, index: number): string => {
+  return `${message.role}-${message.timestamp}-${index}`
+}
 
 // 计算是否有更多消息可加载
 const hasMoreMessages = computed(() => {
@@ -98,49 +144,112 @@ const setMessageRef = (el: any, index: number) => {
   }
 }
 
+// 从消息历史中提取上下文信息（用于智能推荐）
+const getContextFromMessages = () => {
+  const lastMessage = props.messages[props.messages.length - 1]
+  const lastTool = lastMessage?.toolCalls?.[0]?.name
+  const hasError = props.messages.some(m =>
+    m.content?.toLowerCase().includes('error') ||
+    m.toolCalls?.some(tc => tc.status === 'error')
+  )
+
+  return {
+    lastTool,
+    hasError,
+    selectedHosts: chatStore.selectedHostIds
+  }
+}
+
+// 智能推荐选择处理
+const handleSuggestionSelect = (prompt: string) => {
+  emit('sendMessage', prompt)
+}
+
+// 快速命令选择处理
+const handleCommandSelect = (prompt: string) => {
+  emit('sendMessage', prompt)
+}
+
+// 消息操作处理函数
+const handleCopy = (message: Message) => {
+  navigator.clipboard.writeText(message.content)
+  ElMessage.success('已复制到剪贴板')
+}
+
+const handleRegenerate = (message: Message) => {
+  emit('regenerate', message)
+}
+
+const handleContinue = (_message: Message, question: string) => {
+  emit('sendMessage', question)
+}
+
+const handleFeedback = (message: Message, type: 'good' | 'bad') => {
+  // TODO: 实现反馈提交
+  console.log('Feedback:', type, message)
+  ElMessage.success(type === 'good' ? '感谢您的反馈！' : '感谢您的反馈，我们会改进！')
+}
+
+const handleExport = (message: Message) => {
+  const blob = new Blob([message.content], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `message_${Date.now()}.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+  ElMessage.success('消息已导出')
+}
+
+const handleShare = (message: Message) => {
+  const shareText = message.content.substring(0, 100)
+  navigator.clipboard.writeText(shareText)
+  ElMessage.success('分享内容已复制')
+}
+
+const handleToolRerun = (toolCall: any) => {
+  emit('toolRerun', toolCall)
+}
+
+const handleFollowUp = (question: string) => {
+  emit('sendMessage', question)
+}
+
 // 加载更多历史消息
 const loadMoreMessages = async () => {
   loadingMore.value = true
-  // 记录当前滚动位置
-  const scrollHeight = listRef.value?.scrollHeight || 0
 
   await nextTick()
   displayCount.value += BATCH_SIZE
 
-  // 保持滚动位置
+  // 等待 DOM 更新
   await nextTick()
-  if (listRef.value) {
-    const newScrollHeight = listRef.value.scrollHeight
-    listRef.value.scrollTop = newScrollHeight - scrollHeight
-  }
   loadingMore.value = false
 }
 
 // 自动滚动到底部
 const scrollToBottom = () => {
   nextTick(() => {
-    if (listRef.value) {
-      listRef.value.scrollTo({
-        top: listRef.value.scrollHeight,
-        behavior: 'smooth'
-      })
+    if (messageListRef.value) {
+      messageListRef.value.scrollTop = messageListRef.value.scrollHeight
     }
   })
 }
 
 // 检查是否在底部附近
 const isNearBottom = () => {
-  if (!listRef.value) return true
-  const { scrollTop, scrollHeight, clientHeight } = listRef.value
+  if (!messageListRef.value) return true
+  const { scrollTop, scrollHeight, clientHeight } = messageListRef.value
+  // 如果距离底部小于 100px，认为在底部附近
   return scrollHeight - scrollTop - clientHeight < 100
 }
 
 // 处理滚动事件
 const handleScroll = () => {
-  if (!listRef.value) return
-  const { scrollTop, scrollHeight, clientHeight } = listRef.value
-  // 距离底部超过 300px 时显示滚动按钮
-  showScrollButton.value = scrollHeight - scrollTop - clientHeight > 300
+  if (!messageListRef.value) return
+  showScrollButton.value = !isNearBottom()
 }
 
 // 监听消息变化，自动滚动
@@ -163,7 +272,10 @@ watch(
 
 // 监听最后一条消息内容变化（流式输出）
 watch(
-  () => props.messages[props.messages.length - 1]?.content,
+  () => {
+    const lastMessage = props.messages[props.messages.length - 1]
+    return lastMessage?.content
+  },
   () => {
     if (isNearBottom()) {
       scrollToBottom()
@@ -203,11 +315,15 @@ watch(
 )
 
 onMounted(() => {
-  listRef.value?.addEventListener('scroll', handleScroll, { passive: true })
+  // 初始化时滚动到底部
+  nextTick(() => {
+    scrollToBottom()
+  })
 })
 
 onUnmounted(() => {
-  listRef.value?.removeEventListener('scroll', handleScroll)
+  // 清理工作
+  messageRefs.value.clear()
 })
 
 defineExpose({
@@ -216,11 +332,18 @@ defineExpose({
 </script>
 
 <style scoped>
-.message-list {
+.message-list-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.empty-state-with-suggestions {
   flex: 1;
   overflow-y: auto;
-  background: #fff;
-  position: relative;
+  padding: 20px 0;
 }
 
 .empty-state {
@@ -228,7 +351,7 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  padding: 40px 20px;
   color: #909399;
 }
 
@@ -249,6 +372,26 @@ defineExpose({
   justify-content: center;
   padding: 12px;
   border-bottom: 1px solid #ebeef5;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.message-scroller {
+  flex: 1;
+  overflow-y: auto;
+  background: #fff;
+  position: relative;
+  height: 100%;
+}
+
+/* vue3-virtual-scroll-list 样式 */
+.message-item-wrapper {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.message-item-wrapper:hover {
+  background: #fafafa;
 }
 
 .loading-indicator {
@@ -259,6 +402,8 @@ defineExpose({
   padding: 20px;
   color: #409eff;
   font-size: 14px;
+  background: #fff;
+  flex-shrink: 0;
 }
 
 .loading-indicator .is-loading {
@@ -289,6 +434,7 @@ defineExpose({
   cursor: pointer;
   box-shadow: 0 2px 12px rgba(64, 158, 255, 0.4);
   transition: all 0.3s;
+  z-index: 100;
 }
 
 .scroll-to-bottom:hover {

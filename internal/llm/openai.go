@@ -48,6 +48,19 @@ func NewOpenAIClient(cfg OpenAIConfig) *OpenAIClient {
 		cfg.MaxTokens = 4096
 	}
 
+	// 创建 Transport，禁用自动压缩以兼容某些 API
+	transport := &http.Transport{
+		DisableCompression: true, // 禁用自动压缩，避免 brotli 等格式解析问题
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:        100,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
 	return &OpenAIClient{
 		endpoint:  strings.TrimSuffix(cfg.Endpoint, "/"),
 		model:     cfg.Model,
@@ -55,7 +68,8 @@ func NewOpenAIClient(cfg OpenAIConfig) *OpenAIClient {
 		timeout:   cfg.Timeout,
 		maxTokens: cfg.MaxTokens,
 		httpClient: &http.Client{
-			Timeout: cfg.Timeout,
+			Timeout:   cfg.Timeout,
+			Transport: transport,
 		},
 	}
 }

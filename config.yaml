@@ -62,6 +62,13 @@ log:
   format: json   # json / text
   output: stdout # stdout / 文件路径
 
+# 认证配置
+auth:
+  enabled: false              # 是否启用认证（默认关闭以保持向后兼容）
+  secret: "your-secret-key-change-this-in-production"  # JWT 密钥（建议使用环境变量 JWT_SECRET）
+  token_duration: 24h         # Token 有效期
+  issuer: "ai-ops"            # Token 签发者
+
 # MCP 集成配置（可选）
 # MCP (Model Context Protocol) 允许动态加载外部工具
 mcp:

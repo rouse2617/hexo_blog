@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"ai-ops/internal/crypto"
 	"ai-ops/internal/model"
 	"strings"
 
@@ -28,22 +29,41 @@ type HostFilter struct {
 
 // hostRepository 主机仓库实现
 type hostRepository struct {
-	db *gorm.DB
+	db        *gorm.DB
+	encryptor *crypto.Encryptor
 }
 
 // NewHostRepository 创建主机仓库
 func NewHostRepository(db *gorm.DB) HostRepository {
-	return &hostRepository{db: db}
+	return &hostRepository{db: db, encryptor: nil}
+}
+
+// NewHostRepositoryWithEncryption 创建带加密的主机仓库
+func NewHostRepositoryWithEncryption(db *gorm.DB, encryptor *crypto.Encryptor) HostRepository {
+	return &hostRepository{db: db, encryptor: encryptor}
+}
+
+// setEncryptor 设置加密器（可选）
+func (r *hostRepository) setEncryptor(encryptor *crypto.Encryptor) {
+	r.encryptor = encryptor
 }
 
 // Create 创建主机
 func (r *hostRepository) Create(host *model.Host) error {
+	// 保存前加密敏感数据
+	if err := r.encryptBeforeSave(host); err != nil {
+		return err
+	}
 	return r.db.Create(host).Error
 }
 
 // Update 更新主机
 func (r *hostRepository) Update(host *model.Host) error {
-	return r.db.Save(host).Error
+	// 保存前加密敏感数据
+	if err := r.encryptBeforeSave(host); err != nil {
+		return err
+	}
+	return r.db.Model(&model.Host{}).Where("id = ?", host.ID).Updates(host).Error
 }
 
 // Delete 删除主机
@@ -58,6 +78,10 @@ func (r *hostRepository) GetByID(id string) (*model.Host, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 读取后解密敏感数据
+	if err := r.decryptAfterLoad(&host); err != nil {
+		return nil, err
+	}
 	return &host, nil
 }
 
@@ -66,6 +90,10 @@ func (r *hostRepository) GetByName(name string) (*model.Host, error) {
 	var host model.Host
 	err := r.db.Where("name = ?", name).First(&host).Error
 	if err != nil {
+		return nil, err
+	}
+	// 读取后解密敏感数据
+	if err := r.decryptAfterLoad(&host); err != nil {
 		return nil, err
 	}
 	return &host, nil
@@ -102,7 +130,18 @@ func (r *hostRepository) List(filter HostFilter) ([]*model.Host, error) {
 	}
 
 	err := query.Order("created_at DESC").Find(&hosts).Error
-	return hosts, err
+	if err != nil {
+		return nil, err
+	}
+
+	// 读取后解密敏感数据
+	for _, host := range hosts {
+		if err := r.decryptAfterLoad(host); err != nil {
+			return nil, err
+		}
+	}
+
+	return hosts, nil
 }
 
 // UpdateStatus 更新主机状态
@@ -119,5 +158,71 @@ func ContainsKeyword(host *model.Host, keyword string) bool {
 	return strings.Contains(strings.ToLower(host.Name), keyword) ||
 		strings.Contains(strings.ToLower(host.IP), keyword) ||
 		strings.Contains(strings.ToLower(host.User), keyword)
+}
+
+// encryptBeforeSave 保存前加密敏感数据
+func (r *hostRepository) encryptBeforeSave(host *model.Host) error {
+	if r.encryptor == nil {
+		return nil
+	}
+
+	// 加密密码
+	if host.Password != "" {
+		// 检查是否已经加密
+		if !crypto.IsEncrypted(host.Password) {
+			encrypted, err := r.encryptor.Encrypt(host.Password)
+			if err != nil {
+				return err
+			}
+			host.Password = encrypted
+		}
+	}
+
+	// 加密私钥内容
+	if host.KeyContent != "" {
+		// 检查是否已经加密
+		if !crypto.IsEncrypted(host.KeyContent) {
+			encrypted, err := r.encryptor.Encrypt(host.KeyContent)
+			if err != nil {
+				return err
+			}
+			host.KeyContent = encrypted
+		}
+	}
+
+	return nil
+}
+
+// decryptAfterLoad 读取后解密敏感数据
+func (r *hostRepository) decryptAfterLoad(host *model.Host) error {
+	if r.encryptor == nil {
+		return nil
+	}
+
+	// 解密密码
+	if host.Password != "" {
+		// 检查是否为加密数据
+		if crypto.IsEncrypted(host.Password) {
+			decrypted, err := r.encryptor.Decrypt(host.Password)
+			if err != nil {
+				return err
+			}
+			host.Password = decrypted
+		}
+	}
+
+	// 解密私钥内容
+	if host.KeyContent != "" {
+		// 检查是否为加密数据
+		if crypto.IsEncrypted(host.KeyContent) {
+			decrypted, err := r.encryptor.Decrypt(host.KeyContent)
+			if err != nil {
+				return err
+			}
+			host.KeyContent = decrypted
+		}
+	}
+
+	return nil
 }
 

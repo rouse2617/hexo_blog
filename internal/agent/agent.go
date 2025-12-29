@@ -22,6 +22,8 @@ type Agent struct {
 	maxLoops      int
 	timeout       time.Duration
 	promptVersion string // 提示词版本: standard / enhanced
+	errorRecovery *ErrorRecoveryEngine
+	reactAgent    *ReActAgent // ReAct Agent 实例
 }
 
 // Config Agent 配置
@@ -51,6 +53,8 @@ func NewAgent(llmClient llm.Client, toolRegistry *tool.Registry, sshPool *ssh.Po
 		maxLoops:      cfg.MaxLoops,
 		timeout:       cfg.Timeout,
 		promptVersion: cfg.PromptVersion,
+		errorRecovery: NewErrorRecoveryEngine(),
+		reactAgent:    NewReActAgent(toolRegistry, llmClient, sshPool),
 	}
 }
 
@@ -64,11 +68,12 @@ type ChatRequest struct {
 
 // ChatResponse 对话响应
 type ChatResponse struct {
-	SessionID string           // 会话 ID
-	Reply     string           // 回复内容
-	ToolCalls []ToolCallRecord // 工具调用记录
-	Thinking  string           // 思考过程（可选）
-	Error     string           // 错误信息
+	SessionID  string           // 会话 ID
+	Reply      string           // 回复内容
+	ToolCalls  []ToolCallRecord // 工具调用记录
+	Thinking   string           // 思考过程（可选）
+	Error      string           // 错误信息
+	ReActSteps []ReActStep      // ReAct 步骤（可选）
 }
 
 // ToolCallRecord 工具调用记录
@@ -86,8 +91,22 @@ func (a *Agent) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 
+	// 使用动态 Prompt 构建器（仅在 enhanced 模式下）
+	var systemPrompt string
+	if a.promptVersion == "enhanced" {
+		promptBuilder := NewDynamicPromptBuilder(a.toolRegistry, req.Hosts)
+		systemPrompt = promptBuilder.BuildDynamicPrompt(req.Message)
+
+		logger.Info("动态 Prompt 构建",
+			zap.String("task_type", promptBuilder.GetTaskType()),
+			zap.Int("complexity", promptBuilder.GetComplexity()),
+		)
+	} else {
+		systemPrompt = SelectSystemPrompt(a.promptVersion, a.toolRegistry, req.Hosts)
+	}
+
 	// 构建消息列表
-	messages := a.buildMessages(req)
+	messages := a.buildMessagesWithPrompt(req, systemPrompt)
 
 	// 获取工具定义
 	tools := a.toolRegistry.GenerateJSONSchema()
@@ -166,7 +185,7 @@ func (a *Agent) buildMessages(req ChatRequest) []llm.Message {
 	return messages
 }
 
-// executeToolCalls 执行工具调用
+// executeToolCalls 执行工具调用（带错误恢复）
 func (a *Agent) executeToolCalls(ctx context.Context, toolCalls []llm.ToolCall, hosts []string) ([]llm.Message, []ToolCallRecord) {
 	var toolMessages []llm.Message
 	var records []ToolCallRecord
@@ -215,14 +234,69 @@ func (a *Agent) executeToolCalls(ctx context.Context, toolCalls []llm.ToolCall, 
 		}
 
 		var resultStr string
-		if err != nil {
-			record.Error = err.Error()
-			resultStr = fmt.Sprintf("执行错误: %v", err)
-		} else if !result.Success {
-			record.Error = result.Error
-			resultStr = fmt.Sprintf("执行失败: %s", result.Error)
+		if err != nil || !result.Success {
+			// 工具执行失败，尝试错误恢复
+			if err != nil {
+				record.Error = err.Error()
+			} else {
+				record.Error = result.Error
+			}
+
+			// 尝试错误恢复
+			shouldRetry, newCalls, recoveryPrompt, recoveryErr := a.errorRecovery.RecoverFromError(
+				ctx, a, record, nil,
+			)
+
+			if recoveryPrompt != "" {
+				resultStr = recoveryPrompt
+				logger.Info("错误恢复提示", zap.String("prompt", recoveryPrompt))
+			} else if recoveryErr != nil {
+				resultStr = fmt.Sprintf("错误恢复失败: %v\n原始错误: %s", recoveryErr, record.Error)
+			} else {
+				resultStr = fmt.Sprintf("执行错误: %s", record.Error)
+			}
+
+			// 如果有替代工具，尝试执行
+			if shouldRetry && len(newCalls) > 0 {
+				logger.Info("尝试使用替代工具", zap.Int("count", len(newCalls)))
+				for _, newCall := range newCalls {
+					// 解析新工具参数
+					var newParams map[string]interface{}
+					json.Unmarshal([]byte(newCall.Function.Arguments), &newParams)
+
+					// 执行替代工具
+					newResult, newErr := a.toolRegistry.Execute(toolCtx, newCall.Function.Name, newParams)
+
+					if newErr == nil && newResult.Success {
+						// 替代工具成功
+						resultBytes, _ := json.Marshal(newResult.Data)
+						record.Result = fmt.Sprintf("原工具失败，使用替代方案 %s 成功：%s\n结果：%s",
+							newCall.Function.Name,
+							newResult.Message,
+							string(resultBytes))
+						record.Error = ""
+						resultStr = record.Result
+
+						// 记录恢复成功日志
+						a.errorRecovery.LogRecovery(RecoveryLog{
+							Timestamp:   time.Now(),
+							ToolName:    record.Tool,
+							Error:       record.Error,
+							Strategy:    "alternative_tool",
+							Success:     true,
+							Alternative: newCall.Function.Name,
+						})
+						break
+					} else {
+						// 替代工具也失败
+						logger.Warn("替代工具执行失败",
+							zap.String("tool", newCall.Function.Name),
+							zap.Error(newErr))
+					}
+				}
+			}
 		} else {
-			// 序列化结果
+			// 工具执行成功
 			resultBytes, _ := json.Marshal(result.Data)
 			record.Result = string(resultBytes)
 			resultStr = fmt.Sprintf("执行成功: %s\n结果: %s", result.Message, string(resultBytes))
@@ -241,8 +315,22 @@ func (a *Agent) ChatStream(ctx context.Context, req ChatRequest, callback func(c
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 
+	// 使用动态 Prompt 构建器（仅在 enhanced 模式下）
+	var systemPrompt string
+	if a.promptVersion == "enhanced" {
+		promptBuilder := NewDynamicPromptBuilder(a.toolRegistry, req.Hosts)
+		systemPrompt = promptBuilder.BuildDynamicPrompt(req.Message)
+
+		logger.Info("动态 Prompt 构建（流式）",
+			zap.String("task_type", promptBuilder.GetTaskType()),
+			zap.Int("complexity", promptBuilder.GetComplexity()),
+		)
+	} else {
+		systemPrompt = SelectSystemPrompt(a.promptVersion, a.toolRegistry, req.Hosts)
+	}
+
 	// 构建消息列表
-	messages := a.buildMessages(req)
+	messages := a.buildMessagesWithPrompt(req, systemPrompt)
 
 	// 获取工具定义
 	tools := a.toolRegistry.GenerateJSONSchema()
@@ -358,3 +446,13 @@ type StreamChunk struct {
 	Step       int             `json:"step,omitempty"`   // 当前步骤
 	Status     string          `json:"status,omitempty"` // 状态描述
 }
+
+// ChatWithReAct 使用 ReAct 模式进行对话
+// ReAct (Reasoning + Acting) 模式通过显式的思考-行动-观察循环提供更透明的推理过程
+func (a *Agent) ChatWithReAct(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	if a.reactAgent == nil {
+		return nil, fmt.Errorf("ReAct Agent 未初始化")
+	}
+	return a.reactAgent.ChatReAct(ctx, req)
+}
+

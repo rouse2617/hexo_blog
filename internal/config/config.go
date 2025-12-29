@@ -17,7 +17,8 @@ type Config struct {
 	Scripts  ScriptsConfig  `yaml:"scripts"`
 	Agent    AgentConfig    `yaml:"agent"`
 	Log      LogConfig      `yaml:"log"`
-	MCP      []MCPConfig     `yaml:"mcp"`       // MCP 配置
+	MCP      []MCPConfig    `yaml:"mcp"`       // MCP 配置
+	Auth     AuthConfig     `yaml:"auth"`      // 认证配置
 }
 
 // ServerConfig 服务器配置
@@ -91,6 +92,14 @@ type MCPConfig struct {
 	URL     string `yaml:"url"`     // MCP server 地址
 	Timeout int    `yaml:"timeout"` // 超时时间（秒）
 	Enabled bool   `yaml:"enabled"` // 是否启用
+}
+
+// AuthConfig 认证配置
+type AuthConfig struct {
+	Enabled       bool          `yaml:"enabled"`        // 是否启用认证
+	Secret        string        `yaml:"secret"`         // JWT 密钥
+	TokenDuration time.Duration `yaml:"token_duration"` // Token 有效期
+	Issuer        string        `yaml:"issuer"`         // Token 签发者
 }
 
 // Load 从文件加载配置
@@ -199,15 +208,36 @@ func (c *Config) setDefaults() {
 	if c.Log.Output == "" {
 		c.Log.Output = "stdout"
 	}
+
+	// Auth 默认值
+	if c.Auth.Secret == "" {
+		c.Auth.Secret = "change-this-secret-in-production"
+	}
+	if c.Auth.TokenDuration == 0 {
+		c.Auth.TokenDuration = 24 * time.Hour
+	}
+	if c.Auth.Issuer == "" {
+		c.Auth.Issuer = "ai-ops"
+	}
 }
 
 // loadFromEnv 从环境变量加载配置
 func (c *Config) loadFromEnv() {
-	// LLM API Key 优先从环境变量读取
+	// LLM API Key 优先从环境变量读取（支持多种环境变量名称）
 	if apiKey := os.Getenv("LLM_API_KEY"); apiKey != "" {
 		c.LLM.APIKey = apiKey
 	} else if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
 		c.LLM.APIKey = apiKey
+	}
+
+	// LLM Endpoint 可从环境变量覆盖
+	if endpoint := os.Getenv("LLM_ENDPOINT"); endpoint != "" {
+		c.LLM.Endpoint = endpoint
+	}
+
+	// LLM Model 可从环境变量覆盖
+	if model := os.Getenv("LLM_MODEL"); model != "" {
+		c.LLM.Model = model
 	}
 
 	// 数据库 DSN 可从环境变量覆盖
@@ -218,5 +248,15 @@ func (c *Config) loadFromEnv() {
 	// 服务器地址可从环境变量覆盖
 	if addr := os.Getenv("SERVER_ADDR"); addr != "" {
 		c.Server.Addr = addr
+	}
+
+	// 服务器模式可从环境变量覆盖
+	if mode := os.Getenv("SERVER_MODE"); mode != "" {
+		c.Server.Mode = mode
+	}
+
+	// JWT Secret 可从环境变量覆盖（安全优先）
+	if secret := os.Getenv("JWT_SECRET"); secret != "" {
+		c.Auth.Secret = secret
 	}
 }

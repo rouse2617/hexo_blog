@@ -47,7 +47,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   ChatDotRound, Monitor, SetUp, Document,
-  List, Setting, Operation, InfoFilled
+  List, Setting, InfoFilled, Tickets
 } from '@element-plus/icons-vue'
 
 defineProps<{
@@ -64,7 +64,7 @@ const menuItems = [
   { path: '/tools', title: '工具列表', icon: SetUp },
   { path: '/scripts', title: '脚本管理', icon: Document },
   { path: '/tasks', title: '任务历史', icon: List },
-  { path: '/console', title: '控制台', icon: Operation },
+  { path: '/ops', title: '运维控制台', icon: Tickets },
   { path: '/settings', title: '安全设置', icon: Setting },
 ]
 </script>

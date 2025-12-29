@@ -8,6 +8,7 @@ import (
 
 	"ai-ops/internal/agent"
 	"ai-ops/internal/api"
+	"ai-ops/internal/cache"
 	"ai-ops/internal/config"
 	"ai-ops/internal/llm"
 	"ai-ops/internal/mcp"
@@ -247,7 +248,13 @@ func main() {
 		)
 	}
 
-	// 7. 初始化 HTTP 路由
+	// 7. 初始化缓存（可选）
+	var cacheInstance cache.Cache
+	// 如果需要启用缓存，取消下面注释
+	// cacheInstance = cache.NewMemoryCache(1000, 10*time.Minute)
+	// logger.Info("缓存初始化完成")
+
+	// 8. 初始化 HTTP 路由
 	router := api.NewRouter(api.RouterConfig{
 		Agent:          aiAgent,
 		ToolRegistry:   toolRegistry,
@@ -260,13 +267,26 @@ func main() {
 		ConfigRepo:     configRepo,
 		AnalysisRepo:   analysisRepo,
 		LLMClient:      llmClient,
+		Cache:          cacheInstance,
 		Version:        Version,
 		Mode:           cfg.Server.Mode,
 		EnableThinking: cfg.Agent.EnableThinking,
+		Config:         cfg,
 	})
+
+	// 记录认证状态
+	if cfg.Auth.Enabled {
+		logger.Info("JWT 认证已启用",
+			zap.Duration("token_duration", cfg.Auth.TokenDuration),
+			zap.String("issuer", cfg.Auth.Issuer),
+		)
+	} else {
+		logger.Info("JWT 认证未启用（公开模式）")
+	}
+
 	logger.Info("HTTP 路由初始化完成")
 
-	// 8. 启动服务
+	// 9. 启动服务
 	go func() {
 		logger.Info("启动 HTTP 服务", zap.String("addr", cfg.Server.Addr))
 		if err := router.Run(cfg.Server.Addr); err != nil {
@@ -274,7 +294,7 @@ func main() {
 		}
 	}()
 
-	// 9. 等待退出信号
+	// 10. 等待退出信号
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit

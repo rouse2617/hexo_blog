@@ -205,3 +205,252 @@ func SelectSystemPrompt(version string, registry *tool.Registry, hosts []string)
 		return BuildSystemPromptEnhanced(registry, hosts)
 	}
 }
+
+// FewShotExamples Few-Shot 示例
+const FewShotExamples = `
+## 示例对话
+
+### 示例 1：性能问题诊断
+用户："web-1 服务器最近变慢了，帮我看看"
+
+正确做法：
+1. 调用 list_hosts() - 确认 web-1 存在
+2. 调用 check_cpu(host="web-1") - 检查 CPU
+3. 调用 check_memory(host="web-1") - 检查内存
+4. 调用 check_disk(host="web-1") - 检查磁盘
+5. 分析数据，给出诊断结果
+
+错误做法：
+❌ 直接执行 run_command(host="web-1", command="top")
+❌ 一次性调用所有工具（应该先检查再深入）
+
+### 示例 2：批量检查
+用户："检查所有 web 分组主机的磁盘"
+
+正确做法：
+✅ check_disk(hosts=["服务器1", "服务器2"]) - 使用批量参数
+错误做法：
+❌ 多次调用 check_disk(host="服务器1"), check_disk(host="服务器2")...
+
+### 示例 3：日志分析
+用户："查看 nginx 错误日志"
+
+正确做法：
+1. 调用 query_log(host="node1", log_type="nginx", level="error", lines=50)
+2. 如果发现大量错误，提取关键错误信息
+3. 分析错误模式，给出建议
+
+### 示例 4：自适应场景
+用户："查看系统日志"
+AI: "由于有多个关联主机，我将批量查询所有主机的系统日志"
+→ 发现 /var/log/syslog 不存在
+→ 自动改用 journalctl -n 10 --no-pager
+→ 成功获取日志并分析
+
+### 示例 5：交互式诊断
+用户："CPU 突然飙升到 100%"
+AI: "当前 CPU 使用率正常（0-1.5%），请问：
+1. 哪台主机出现问题？
+2. 什么时间发生的？
+3. 问题是否持续存在？
+我将根据您的回答进行针对性排查。"
+`
+
+// CoTPrompt 思维链模板
+const CoTPrompt = `
+## 思考链模板（必须遵循）
+
+对于每个用户请求，按以下模板思考：
+
+### 步骤 1：问题分析
+- 用户意图：[一句话概括用户想做什么]
+- 问题类型：[信息收集/问题诊断/故障修复/容量规划]
+- 涉及主机：[哪些主机]
+- 关键指标：[需要哪些数据]
+
+### 步骤 2：信息收集计划
+- 第一步：[做什么，如列出主机]
+- 第二步：[做什么，如检查 CPU]
+- 第三步：[做什么，如检查内存]
+- 依赖关系：[哪些步骤依赖前面的结果]
+
+### 步骤 3：执行与观察
+- 执行结果：[简述工具返回结果]
+- 异常发现：[有什么异常数据]
+- 数据关联：[多个指标之间有什么关系]
+
+### 步骤 4：根因分析
+- 问题症状：[表现是什么]
+- 可能原因：[基于数据推测 2-3 个可能原因]
+- 排除法：[哪些可以排除]
+- 最可能原因：[结论]
+
+### 步骤 5：解决方案
+- 短期方案：[立即可以做的]
+- 长期方案：[预防措施]
+- 风险评估：[有什么风险]
+`
+
+// DynamicPromptBuilder 动态 Prompt 构建器（增强版）
+type DynamicPromptBuilder struct {
+	registry   *tool.Registry
+	hosts      []string
+	taskType   string // 任务类型
+	complexity int    // 复杂度 1-5
+}
+
+// NewDynamicPromptBuilder 创建动态 Prompt 构建器
+func NewDynamicPromptBuilder(registry *tool.Registry, hosts []string) *DynamicPromptBuilder {
+	return &DynamicPromptBuilder{
+		registry: registry,
+		hosts:    hosts,
+	}
+}
+
+// BuildDynamicPrompt 构建动态 Prompt
+func (b *DynamicPromptBuilder) BuildDynamicPrompt(userMessage string) string {
+	// 1. 分析任务类型和复杂度
+	b.taskType = b.analyzeTaskType(userMessage)
+	b.complexity = b.analyzeComplexity(userMessage)
+
+	// 2. 根据复杂度选择 Prompt 版本
+	basePrompt := BuildSystemPromptEnhanced(b.registry, b.hosts)
+
+	switch {
+	case b.complexity <= 2:
+		// 简单任务，使用基础 Prompt
+		return basePrompt
+	case b.complexity <= 4:
+		// 中等任务，添加思维链
+		prompt := basePrompt + "\n" + CoTPrompt
+		// 添加任务特定指导
+		if guidance := b.getTaskGuidance(b.taskType); guidance != "" {
+			prompt += "\n" + guidance
+		}
+		return prompt
+	default:
+		// 复杂任务，添加全部增强
+		prompt := basePrompt + "\n" + CoTPrompt + "\n" + FewShotExamples
+		// 添加任务特定指导
+		if guidance := b.getTaskGuidance(b.taskType); guidance != "" {
+			prompt += "\n" + guidance
+		}
+		return prompt
+	}
+}
+
+// analyzeTaskType 分析任务类型
+func (b *DynamicPromptBuilder) analyzeTaskType(message string) string {
+	keywords := map[string]string{
+		"监控":      "monitoring",
+		"检查":      "check",
+		"诊断":      "diagnosis",
+		"修复":      "fix",
+		"部署":      "deploy",
+		"日志":      "log_analysis",
+		"性能":      "performance",
+		"慢":       "performance",
+		"磁盘":      "disk",
+		"内存":      "memory",
+		"CPU":     "cpu",
+		"网络":      "network",
+		"告警":      "monitoring",
+		"分析":      "diagnosis",
+		"排查":      "diagnosis",
+	}
+
+	lowerMsg := strings.ToLower(message)
+	for kw, taskType := range keywords {
+		if strings.Contains(lowerMsg, strings.ToLower(kw)) {
+			return taskType
+		}
+	}
+	return "general"
+}
+
+// analyzeComplexity 分析任务复杂度
+func (b *DynamicPromptBuilder) analyzeComplexity(message string) int {
+	complexity := 1
+
+	// 基础复杂度
+	if len(message) > 50 {
+		complexity = 2
+	}
+
+	// 增加复杂度的因素
+	if strings.Contains(message, "所有") || strings.Contains(message, "批量") {
+		complexity += 1
+	}
+	if strings.Contains(message, "分析") || strings.Contains(message, "诊断") {
+		complexity += 1
+	}
+	if strings.Count(message, "然后") > 0 || strings.Count(message, "接着") > 0 {
+		complexity += 1
+	}
+	if strings.Contains(message, "如果") || strings.Contains(message, "根据") {
+		complexity += 1
+	}
+
+	// 限制最大复杂度
+	if complexity > 5 {
+		complexity = 5
+	}
+	return complexity
+}
+
+// getTaskGuidance 获取任务特定指导
+func (b *DynamicPromptBuilder) getTaskGuidance(taskType string) string {
+	guidance := map[string]string{
+		"monitoring": `
+## 监控任务特别指导
+- 优先使用批量操作（hosts 参数）
+- 对比多个主机的数据，找出异常节点
+- 关注趋势而非绝对值`,
+		"diagnosis": `
+## 诊断任务特别指导
+- 必须先收集足够信息，再给出结论
+- 使用思维链逐步分析
+- 给出多个可能原因，按概率排序
+- 考虑多个指标之间的关联性`,
+		"performance": `
+## 性能问题特别指导
+- 检查 CPU、内存、磁盘 I/O、网络
+- 查看进程资源占用
+- 分析历史趋势（如果有）
+- 识别性能瓶颈的具体位置`,
+		"fix": `
+## 修复任务特别指导
+- 操作前必须说明风险
+- 优先使用非破坏性方法
+- 操作后验证结果
+- 准备回滚方案`,
+		"log_analysis": `
+## 日志分析任务特别指导
+- 先确定日志位置和类型
+- 使用 query_log 工具而非直接 cat
+- 关注错误模式和频率
+- 提取关键错误信息并分析原因`,
+		"check": `
+## 检查任务特别指导
+- 系统化检查：先整体后局部
+- 使用批量参数提高效率
+- 对比正常值识别异常
+- 记录基准数据以便对比`,
+	}
+
+	if g, ok := guidance[taskType]; ok {
+		return g
+	}
+	return ""
+}
+
+// GetTaskType 获取分析出的任务类型
+func (b *DynamicPromptBuilder) GetTaskType() string {
+	return b.taskType
+}
+
+// GetComplexity 获取分析出的复杂度
+func (b *DynamicPromptBuilder) GetComplexity() int {
+	return b.complexity
+}
+

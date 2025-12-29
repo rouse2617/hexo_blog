@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>持久化功能验证</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: #409eff;
+      font-size: 18px;
+      margin-bottom: 15px;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    .status.success {
+      background: #f0f9ff;
+      color: #67c23a;
+      border: 1px solid #b3e19d;
+    }
+    .status.error {
+      background: #fef0f0;
+      color: #f56c6c;
+      border: 1px solid #fbc4c4;
+    }
+    .key-value {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .key-value:last-child {
+      border-bottom: none;
+    }
+    .key {
+      font-weight: 500;
+      color: #606266;
+    }
+    .value {
+      color: #909399;
+      font-family: monospace;
+    }
+    button {
+      background: #409eff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #66b1ff;
+    }
+    button.danger {
+      background: #f56c6c;
+    }
+    button.danger:hover {
+      background: #f78989;
+    }
+    .info {
+      background: #f4f4f5;
+      padding: 12px;
+      border-radius: 4px;
+      margin-top: 15px;
+      font-size: 14px;
+      color: #606266;
+    }
+    code {
+      background: #f4f4f5;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      color: #e6a23c;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎯 Pinia 状态持久化功能验证</h1>
+
+  <div class="card">
+    <h2>✅ 插件配置</h2>
+    <div class="key-value">
+      <span class="key">插件文件</span>
+      <span class="value">src/stores/plugins/persist.ts</span>
+    </div>
+    <div class="key-value">
+      <span class="key">注册位置</span>
+      <span class="value">src/main.ts</span>
+    </div>
+    <div class="key-value">
+      <span class="key">全局启用</span>
+      <span class="value">false (每个 store 单独配置)</span>
+    </div>
+    <div class="key-value">
+      <span class="key">默认存储</span>
+      <span class="value">localStorage</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📦 已配置持久化的 Store</h2>
+
+    <div style="margin-bottom: 20px;">
+      <span class="status success">已配置</span>
+      <strong>app.ts</strong> - 应用配置
+      <div class="info">
+        <strong>持久化字段:</strong> sidebarCollapsed, theme, language, hostPageSize, sessionPageSize<br>
+        <strong>存储 Key:</strong> <code>ai-pro-app</code>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <span class="status success">已配置</span>
+      <strong>chat.ts</strong> - 聊天会话
+      <div class="info">
+        <strong>持久化字段:</strong> sessions, currentSessionId, selectedHostIds<br>
+        <strong>存储 Key:</strong> <code>ai-pro-chat</code><br>
+        <strong>消息缓存:</strong> <code>chat-messages-{sessionId}</code> (30分钟有效期)
+      </div>
+    </div>
+
+    <div style="margin-bottom: 20px;">
+      <span class="status success">已配置</span>
+      <strong>console.ts</strong> - 控制台
+      <div class="info">
+        <strong>持久化字段:</strong> selectedHosts<br>
+        <strong>存储 Key:</strong> <code>ai-pro-console</code>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>💾 当前存储状态</h2>
+    <div id="storage-status"></div>
+    <button onclick="refreshStorage()">刷新状态</button>
+  </div>
+
+  <div class="card">
+    <h2>🔧 操作</h2>
+    <button onclick="clearAllStorage()">清除所有持久化数据</button>
+    <button class="danger" onclick="reloadPage()">刷新页面</button>
+    <div class="info">
+      <strong>提示:</strong> 点击"刷新页面"后，侧边栏状态、主题、会话等会从 localStorage 自动恢复
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📚 相关文档</h2>
+    <div class="key-value">
+      <span class="key">使用文档</span>
+      <span class="value"><a href="src/stores/plugins/README.md">README.md</a></span>
+    </div>
+    <div class="key-value">
+      <span class="key">实施总结</span>
+      <span class="value"><a href="PERSISTENCE_MIGRATION.md">PERSISTENCE_MIGRATION.md</a></span>
+    </div>
+    <div class="key-value">
+      <span class="key">使用示例</span>
+      <span class="value"><a href="src/composables/usePersistedState.ts">usePersistedState.ts</a></span>
+    </div>
+  </div>
+
+  <script>
+    function getStorageKeys() {
+      const keys = {
+        'ai-pro-app': localStorage.getItem('ai-pro-app'),
+        'ai-pro-chat': localStorage.getItem('ai-pro-chat'),
+        'ai-pro-console': localStorage.getItem('ai-pro-console')
+      }
+
+      // 查找所有消息缓存
+      const messageCaches = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && key.startsWith('chat-messages-')) {
+          messageCaches.push({
+            key: key,
+            size: localStorage.getItem(key)?.length || 0
+          })
+        }
+      }
+
+      return { keys, messageCaches }
+    }
+
+    function refreshStorage() {
+      const { keys, messageCaches } = getStorageKeys()
+      const container = document.getElementById('storage-status')
+
+      let html = ''
+
+      for (const [key, value] of Object.entries(keys)) {
+        if (value) {
+          try {
+            const parsed = JSON.parse(value)
+            const fields = Object.keys(parsed).join(', ')
+            html += `
+              <div class="key-value">
+                <span class="key">${key}</span>
+                <span class="value">✅ 已存储 (${fields})</span>
+              </div>
+            `
+          } catch (e) {
+            html += `
+              <div class="key-value">
+                <span class="key">${key}</span>
+                <span class="value">⚠️ 数据损坏</span>
+              </div>
+            `
+          }
+        } else {
+          html += `
+            <div class="key-value">
+              <span class="key">${key}</span>
+              <span class="value">❌ 未存储</span>
+            </div>
+          `
+        }
+      }
+
+      if (messageCaches.length > 0) {
+        html += `
+          <div class="key-value">
+            <span class="key">消息缓存</span>
+            <span class="value">✅ ${messageCaches.length} 个会话</span>
+          </div>
+        `
+        messageCaches.forEach(cache => {
+          html += `
+            <div class="key-value" style="padding-left: 20px;">
+              <span class="key">${cache.key}</span>
+              <span class="value">${(cache.size / 1024).toFixed(2)} KB</span>
+            </div>
+          `
+        })
+      }
+
+      container.innerHTML = html || '<p style="color: #909399;">暂无持久化数据</p>'
+    }
+
+    function clearAllStorage() {
+      if (confirm('确定要清除所有持久化数据吗？此操作不可恢复。')) {
+        // 清除应用相关数据
+        localStorage.removeItem('ai-pro-app')
+        localStorage.removeItem('ai-pro-chat')
+        localStorage.removeItem('ai-pro-console')
+
+        // 清除所有消息缓存
+        const keysToRemove = []
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (key && key.startsWith('chat-messages-')) {
+            keysToRemove.push(key)
+          }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key))
+
+        alert('已清除所有持久化数据！')
+        refreshStorage()
+      }
+    }
+
+    function reloadPage() {
+      location.reload()
+    }
+
+    // 初始化
+    refreshStorage()
+  </script>
+</body>
+</html>

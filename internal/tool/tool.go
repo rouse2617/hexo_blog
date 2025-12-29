@@ -125,3 +125,30 @@ func GetStringSliceParam(params map[string]interface{}, name string) []string {
 	}
 	return nil
 }
+
+// GetFloatParam 获取浮点数参数
+func GetFloatParam(params map[string]interface{}, name string, defaultVal float64) float64 {
+	if v, ok := params[name]; ok {
+		switch val := v.(type) {
+		case float64:
+			return val
+		case float32:
+			return float64(val)
+		case int:
+			return float64(val)
+		case int64:
+			return float64(val)
+		}
+	}
+	return defaultVal
+}
+
+// GetArrayParam 获取数组参数（通用）
+func GetArrayParam(params map[string]interface{}, name string) []interface{} {
+	if v, ok := params[name]; ok {
+		if arr, ok := v.([]interface{}); ok {
+			return arr
+		}
+	}
+	return nil
+}

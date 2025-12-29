@@ -1,0 +1,62 @@
+# Git
+.git
+.gitignore
+.claude
+
+# 文档
+*.md
+docs
+README*
+
+# IDE
+.vscode
+.idea
+.cursor
+*.swp
+*.swo
+*~
+
+# 构建产物
+bin
+dist
+*.exe
+*.dll
+*.so
+*.dylib
+ai-ops
+ai-pro
+server
+
+# 依赖
+node_modules
+vendor
+
+# 测试
+test
+*_test.go
+*.test
+
+# 数据文件
+data
+*.db
+*.db-shm
+*.db-wal
+
+# 配置（敏感信息）
+.env
+*.env
+
+# 日志
+*.log
+
+# 临时文件
+tmp
+temp
+.TMP
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store

@@ -13,6 +13,7 @@ export interface ToolCall {
   arguments: string
   params?: Record<string, any>
   result?: string
+  error?: string
   status?: 'pending' | 'running' | 'success' | 'error'
 }
 
