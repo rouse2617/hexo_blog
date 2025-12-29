@@ -19,6 +19,17 @@ func RegisterAllEnhanced(registry *tool.Registry, getHostsFunc func(group string
 		NewCheckProcessToolEnhanced(),
 		NewRunCommandToolEnhanced(),
 		NewListHostsToolEnhanced(getHostsFunc),
+		&IntrusionDetectionTool{},
+		NewTrendAnalysisTool(),
+		NewRootCauseDiagnosisTool(),
+		NewAnomalyDetectionTool(),
+		NewAutoRecoveryTool(),
+		NewAlertManagerTool(),
+		// 高级分析工具
+		NewPerformanceAnalysisTool(),
+		NewNetworkCheckTool(),
+		NewPortCheckTool(),
+		NewInodeCheckTool(),
 	}
 
 	for _, t := range tools {
@@ -65,6 +76,20 @@ func RegisterBasicEnhanced(registry *tool.Registry) error {
 		NewCheckDiskToolEnhanced(),
 		NewCheckProcessToolEnhanced(),
 		NewRunCommandToolEnhanced(),
+		&IntrusionDetectionTool{},
+		// 高级分析工具
+		NewPerformanceAnalysisTool(),
+		NewNetworkCheckTool(),
+		NewPortCheckTool(),
+		NewInodeCheckTool(),
+		NewTrendAnalysisTool(),
+		NewRootCauseDiagnosisTool(),
+		NewAnomalyDetectionTool(),
+		NewAutoRecoveryTool(),
+		NewAlertManagerTool(),
+		// 存储专家工具
+		NewStorageCheckTool(),
+		NewRAIDCheckTool(),
 	}
 
 	for _, t := range tools {
