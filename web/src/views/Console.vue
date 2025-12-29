@@ -31,7 +31,7 @@
       :initial-left-width="380"
       :min-left-width="280"
       :max-left-width="600"
-      height="calc(100vh - 240px)"
+      height="calc(100vh - 200px)"
     >
       <template #left>
         <div class="left-panel">
@@ -61,9 +61,9 @@
 
       <template #right>
         <ResizableVerticalPanels
-          :initial-top-height="320"
-          :min-top-height="240"
-          :max-top-height="480"
+          :initial-top-height="260"
+          :min-top-height="200"
+          :max-top-height="400"
           height="100%"
         >
           <template #top>
@@ -234,15 +234,19 @@ const handleRetry = async (result: BatchExecuteResult) => {
       consoleStore.operationParams
     )
     ElMessage.success('重试成功')
-    resultTab.value = 'detail'
+    // 重试后切换到 AI 分析标签
+    resultTab.value = 'analysis'
   } catch (error: any) {
     ElMessage.error(error.message || '重试失败')
   }
 }
 
 // 监听结果变化，自动切换标签
-watch(hasResults, (has) => {
-  if (has && resultTab.value === 'empty') {
+watch(hasResults, (has, had) => {
+  // 当从无结果变为有结果时，自动切换到 AI 分析
+  if (has && !had && resultTab.value === 'storage') {
+    resultTab.value = 'analysis'
+  } else if (has && resultTab.value === 'empty') {
     resultTab.value = 'overview'
   } else if (!has && resultTab.value !== 'storage') {
     resultTab.value = 'storage'
@@ -254,8 +258,10 @@ watch(hasResults, (has) => {
 .console-page {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-5);
+  gap: var(--spacing-6);
   height: 100%;
+  padding: var(--spacing-5);
+  background: var(--color-gray-50);
 }
 
 /* 页面头部 */

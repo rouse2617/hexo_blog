@@ -19,20 +19,13 @@
         >
           <template #title>
             <div class="collapse-title">
-              <el-icon :color="result.status === 'success' ? '#67c23a' : '#f56c6c'">
-                <CircleCheck v-if="result.status === 'success'" />
-                <CircleClose v-else />
-              </el-icon>
+              <div class="status-indicator" :class="result.status">
+                <span class="status-dot"></span>
+              </div>
               <span class="host-name">{{ result.host }}</span>
-              <el-tag
-                :type="result.status === 'success' ? 'success' : 'danger'"
-                size="small"
-                style="margin-left: 10px"
-              >
-                {{ result.status === 'success' ? '成功' : '失败' }}
-              </el-tag>
-              <span class="elapsed" style="margin-left: 10px; color: var(--el-text-color-secondary)">
-                耗时: {{ result.elapsed }}
+              <span class="elapsed">
+                <el-icon><Timer /></el-icon>
+                {{ formatElapsed(result.elapsed) }}
               </span>
             </div>
           </template>
@@ -111,7 +104,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CircleCheck, CircleClose, DocumentCopy } from '@element-plus/icons-vue'
+import { DocumentCopy, Timer } from '@element-plus/icons-vue'
 import type { BatchExecuteResult } from '@/api/operations'
 import { useConsoleStore } from '@/stores/console'
 
@@ -120,6 +113,35 @@ const consoleStore = useConsoleStore()
 const activeNames = ref<string[]>([])
 
 const results = computed(() => consoleStore.executionResults)
+
+// 格式化耗时时间
+const formatElapsed = (elapsed: string) => {
+  // 解析原始耗时字符串，例如 "7.3168ms"
+  const match = elapsed.match(/([\d.]+)(ms|s|m)/)
+  if (!match) return elapsed
+
+  const value = parseFloat(match[1])
+  const unit = match[2]
+
+  // 根据单位转换并格式化
+  let milliseconds = value
+  if (unit === 's') {
+    milliseconds = value * 1000
+  } else if (unit === 'm') {
+    milliseconds = value * 60000
+  }
+
+  // 格式化显示
+  if (milliseconds < 1000) {
+    return `${Math.round(milliseconds * 10) / 10}ms`
+  } else if (milliseconds < 60000) {
+    return `${(milliseconds / 1000).toFixed(2)}s`
+  } else {
+    const minutes = Math.floor(milliseconds / 60000)
+    const seconds = ((milliseconds % 60000) / 1000).toFixed(0)
+    return `${minutes}m ${seconds}s`
+  }
+}
 
 const handleExpandAll = () => {
   activeNames.value = results.value.map((_, index) => index.toString())
@@ -224,11 +246,86 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   width: 100%;
+  gap: 12px;
+}
+
+/* 状态指示器 - 带脉冲效果 */
+.status-indicator {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.status-indicator.success {
+  background: #f0f9ff;
+}
+
+.status-indicator.error {
+  background: #fef2f2;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  position: relative;
+}
+
+.status-indicator.success .status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+  animation: pulse-success 2s infinite;
+}
+
+.status-indicator.error .status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+  animation: pulse-error 2s infinite;
+}
+
+@keyframes pulse-success {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}
+
+@keyframes pulse-error {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
 }
 
 .host-name {
-  font-weight: 500;
-  margin-left: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  flex: 1;
+}
+
+.elapsed {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  padding: 4px 10px;
+  border-radius: 12px;
 }
 
 .result-content {

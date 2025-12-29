@@ -55,8 +55,17 @@
             </div>
           </el-form-item>
           <el-form-item label="超时时间">
-            <el-input-number v-model="commandForm.timeout" :min="1" :max="300" />
-            <span style="margin-left: 10px; color: var(--el-text-color-secondary)">秒</span>
+            <div class="timeout-control">
+              <el-slider
+                v-model="commandForm.timeout"
+                :min="5"
+                :max="300"
+                :step="5"
+                :marks="timeoutMarks"
+                show-stops
+              />
+              <span class="timeout-value">{{ commandForm.timeout }} 秒</span>
+            </div>
           </el-form-item>
           <el-form-item>
             <el-button 
@@ -130,6 +139,15 @@ const dangerWarning = computed(() => {
 const highlightedCommand = computed(() => {
   return commandForm.value.command ? highlightDangerousKeywords(commandForm.value.command) : ''
 })
+
+// 超时滑块标记
+const timeoutMarks = computed(() => ({
+  5: '5s',
+  30: '30s',
+  60: '1m',
+  120: '2m',
+  300: '5m'
+}))
 
 const handleTabChange = (tab: string) => {
   // 切换标签时清空表单
@@ -290,22 +308,55 @@ const handleCheckDisk = () => {
 
 .command-preview {
   margin-top: 8px;
-  padding: 8px 12px;
-  background-color: #f5f7fa;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .preview-label {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
+  color: #00ff9d;
+  font-size: 11px;
   margin-right: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .preview-content {
   display: inline;
-  color: var(--el-text-color-primary);
+  color: #e0e0e0;
+}
+
+.preview-content :deep(.danger-keyword) {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+.preview-content :deep(.warning-keyword) {
+  color: #ffd93d;
+  font-weight: 600;
+}
+
+/* 超时控制 */
+.timeout-control {
+  width: 100%;
+  padding: 0 10px;
+}
+
+.timeout-value {
+  display: block;
+  text-align: center;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+
+.timeout-control :deep(.el-slider__marks-text) {
+  font-size: 11px;
 }
 </style>
