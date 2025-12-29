@@ -190,7 +190,8 @@ const handleSend = async (message: string) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 280px;
+  min-width: 240px;
+  max-width: 320px;
   gap: var(--spacing-4);
 }
 

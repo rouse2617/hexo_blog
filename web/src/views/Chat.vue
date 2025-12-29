@@ -10,6 +10,9 @@ import ChatWindow from '@/components/chat/ChatWindow.vue'
 
 <style scoped>
 .chat-page {
-  height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
 }
 </style>

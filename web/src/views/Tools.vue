@@ -271,7 +271,8 @@ const handleToggle = async (name: string, enabled: boolean) => {
 }
 
 .search-box {
-  width: 280px;
+  width: 240px;
+  max-width: 100%;
 }
 
 .toolbar-right {

@@ -6,7 +6,7 @@
           v-model="searchKeyword"
           placeholder="搜索主机名称或地址"
           clearable
-          style="width: 200px; margin-right: 10px"
+          class="search-input"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
@@ -16,7 +16,7 @@
           v-model="statusFilter"
           placeholder="状态筛选"
           clearable
-          style="width: 120px; margin-right: 10px"
+          class="status-filter"
         >
           <el-option label="全部" value="" />
           <el-option label="在线" value="online" />
@@ -36,7 +36,7 @@
       :data="filteredHosts"
       v-loading="loading"
       stripe
-      height="calc(100vh - 280px)"
+      class="host-table"
       @selection-change="handleSelectionChange"
     >
       <el-table-column type="selection" width="55" />
@@ -268,22 +268,42 @@ onUnmounted(() => {
   align-items: center;
   padding: 12px;
   border-bottom: 1px solid var(--el-border-color);
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  gap: var(--spacing-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.search-input {
+  width: 180px;
+  max-width: 100%;
+}
+
+.status-filter {
+  width: 110px;
+  max-width: 100%;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--spacing-3);
 }
 
 .selected-count {
   color: var(--el-text-color-secondary);
   font-size: 14px;
+}
+
+.host-table {
+  flex: 1;
+  min-height: 0;
 }
 
 .host-name-cell {

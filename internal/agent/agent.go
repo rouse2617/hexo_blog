@@ -16,17 +16,20 @@ import (
 
 // Agent AI 运维助手
 type Agent struct {
-	llmClient    llm.Client
-	toolRegistry *tool.Registry
-	sshPool      *ssh.Pool
-	maxLoops     int
-	timeout      time.Duration
+	llmClient     llm.Client
+	toolRegistry  *tool.Registry
+	sshPool       *ssh.Pool
+	maxLoops      int
+	timeout       time.Duration
+	promptVersion string // 提示词版本: standard / enhanced
 }
 
 // Config Agent 配置
 type Config struct {
-	MaxLoops int
-	Timeout  time.Duration
+	MaxLoops       int
+	Timeout        time.Duration
+	PromptVersion  string // 提示词版本: standard / enhanced
+	EnableThinking bool   // 启用思考过程
 }
 
 // NewAgent 创建 Agent
@@ -37,13 +40,17 @@ func NewAgent(llmClient llm.Client, toolRegistry *tool.Registry, sshPool *ssh.Po
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 5 * time.Minute
 	}
+	if cfg.PromptVersion == "" {
+		cfg.PromptVersion = "enhanced" // 默认使用增强版
+	}
 
 	return &Agent{
-		llmClient:    llmClient,
-		toolRegistry: toolRegistry,
-		sshPool:      sshPool,
-		maxLoops:     cfg.MaxLoops,
-		timeout:      cfg.Timeout,
+		llmClient:     llmClient,
+		toolRegistry:  toolRegistry,
+		sshPool:       sshPool,
+		maxLoops:      cfg.MaxLoops,
+		timeout:       cfg.Timeout,
+		promptVersion: cfg.PromptVersion,
 	}
 }
 
@@ -146,8 +153,8 @@ func (a *Agent) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error
 func (a *Agent) buildMessages(req ChatRequest) []llm.Message {
 	messages := make([]llm.Message, 0)
 
-	// 系统提示词
-	systemPrompt := BuildSystemPromptWithHosts(a.toolRegistry, req.Hosts)
+	// 系统提示词（根据配置选择版本）
+	systemPrompt := SelectSystemPrompt(a.promptVersion, a.toolRegistry, req.Hosts)
 	messages = append(messages, llm.NewSystemMessage(systemPrompt))
 
 	// 历史消息

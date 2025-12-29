@@ -12,11 +12,12 @@ type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	LLM      LLMConfig      `yaml:"llm"`
 	SSH      SSHConfig      `yaml:"ssh"`
-	Hosts    []HostConfig   `yaml:"hosts"` // 预定义主机列表
+	Hosts    []HostConfig   `yaml:"hosts"`      // 预定义主机列表
 	Database DatabaseConfig `yaml:"database"`
 	Scripts  ScriptsConfig  `yaml:"scripts"`
 	Agent    AgentConfig    `yaml:"agent"`
 	Log      LogConfig      `yaml:"log"`
+	MCP      []MCPConfig     `yaml:"mcp"`       // MCP 配置
 }
 
 // ServerConfig 服务器配置
@@ -71,7 +72,10 @@ type ScriptsConfig struct {
 
 // AgentConfig Agent 配置
 type AgentConfig struct {
-	MaxLoops int `yaml:"max_loops"` // 最大循环次数
+	MaxLoops       int    `yaml:"max_loops"`        // 最大循环次数
+	Timeout        int    `yaml:"timeout"`          // 单次请求超时（秒）
+	PromptVersion  string `yaml:"prompt_version"`   // 提示词版本: standard / enhanced
+	EnableThinking bool   `yaml:"enable_thinking"`  // 启用思考过程输出
 }
 
 // LogConfig 日志配置
@@ -79,6 +83,14 @@ type LogConfig struct {
 	Level  string `yaml:"level"`  // 日志级别: debug / info / warn / error
 	Format string `yaml:"format"` // 日志格式: json / text
 	Output string `yaml:"output"` // 输出位置: stdout / 文件路径
+}
+
+// MCPConfig MCP 配置
+type MCPConfig struct {
+	Name    string `yaml:"name"`    // MCP server 名称
+	URL     string `yaml:"url"`     // MCP server 地址
+	Timeout int    `yaml:"timeout"` // 超时时间（秒）
+	Enabled bool   `yaml:"enabled"` // 是否启用
 }
 
 // Load 从文件加载配置
@@ -166,6 +178,16 @@ func (c *Config) setDefaults() {
 	if c.Agent.MaxLoops == 0 {
 		c.Agent.MaxLoops = 10
 	}
+	if c.Agent.Timeout == 0 {
+		c.Agent.Timeout = 300 // 5 分钟
+	}
+	if c.Agent.PromptVersion == "" {
+		c.Agent.PromptVersion = "enhanced" // 默认使用增强版
+	}
+	// EnableThinking 默认为 false，等 Phase 2 实现后启用
+	// if c.Agent.EnableThinking == false {
+	// 	c.Agent.EnableThinking = true
+	// }
 
 	// Log 默认值
 	if c.Log.Level == "" {

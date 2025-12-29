@@ -10,6 +10,7 @@ import (
 	"ai-ops/internal/api"
 	"ai-ops/internal/config"
 	"ai-ops/internal/llm"
+	"ai-ops/internal/mcp"
 	"ai-ops/internal/model"
 	"ai-ops/internal/repository"
 	"ai-ops/internal/security"
@@ -212,25 +213,56 @@ func main() {
 
 	// 6. 初始化 Agent
 	aiAgent := agent.NewAgent(llmClient, toolRegistry, sshPool, agent.Config{
-		MaxLoops: cfg.Agent.MaxLoops,
+		MaxLoops:       cfg.Agent.MaxLoops,
+		Timeout:        time.Duration(cfg.Agent.Timeout) * time.Second,
+		PromptVersion:  cfg.Agent.PromptVersion,
+		EnableThinking: cfg.Agent.EnableThinking,
 	})
-	logger.Info("Agent 初始化完成", zap.Int("max_loops", cfg.Agent.MaxLoops))
+	logger.Info("Agent 初始化完成",
+		zap.Int("max_loops", cfg.Agent.MaxLoops),
+		zap.Int("timeout", cfg.Agent.Timeout),
+		zap.String("prompt_version", cfg.Agent.PromptVersion),
+		zap.Bool("enable_thinking", cfg.Agent.EnableThinking),
+	)
+
+	// 6.5 初始化 MCP Manager
+	mcpManager := mcp.NewManager(toolRegistry)
+	for _, mcpCfg := range cfg.MCP {
+		if err := mcpManager.RegisterClient(mcp.Config{
+			Name:    mcpCfg.Name,
+			URL:     mcpCfg.URL,
+			Timeout: time.Duration(mcpCfg.Timeout) * time.Second,
+			Enabled: mcpCfg.Enabled,
+		}); err != nil {
+			logger.Warn("注册 MCP server 失败",
+				zap.String("name", mcpCfg.Name),
+				zap.Error(err),
+			)
+		}
+	}
+	if len(cfg.MCP) > 0 {
+		logger.Info("MCP 初始化完成",
+			zap.Int("servers", len(mcpManager.ListClients())),
+			zap.Any("stats", mcpManager.GetStats()),
+		)
+	}
 
 	// 7. 初始化 HTTP 路由
 	router := api.NewRouter(api.RouterConfig{
-		Agent:        aiAgent,
-		ToolRegistry: toolRegistry,
-		SSHPool:      sshPool,
-		PolicyStore:  policyStore,
-		AuditLogger:  auditLogger,
-		HostRepo:     hostRepo,
-		SessionRepo:  sessionRepo,
-		GroupRepo:    groupRepo,
-		ConfigRepo:   configRepo,
-		AnalysisRepo: analysisRepo,
-		LLMClient:    llmClient,
-		Version:      Version,
-		Mode:         cfg.Server.Mode,
+		Agent:          aiAgent,
+		ToolRegistry:   toolRegistry,
+		SSHPool:        sshPool,
+		PolicyStore:    policyStore,
+		AuditLogger:    auditLogger,
+		HostRepo:       hostRepo,
+		SessionRepo:    sessionRepo,
+		GroupRepo:      groupRepo,
+		ConfigRepo:     configRepo,
+		AnalysisRepo:   analysisRepo,
+		LLMClient:      llmClient,
+		Version:        Version,
+		Mode:           cfg.Server.Mode,
+		EnableThinking: cfg.Agent.EnableThinking,
 	})
 	logger.Info("HTTP 路由初始化完成")
 

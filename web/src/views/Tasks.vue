@@ -7,17 +7,17 @@
           placeholder="搜索任务"
           :prefix-icon="Search"
           clearable
-          style="width: 200px"
+          class="search-input"
           @input="handleSearch"
         />
-        <el-select v-model="statusFilter" placeholder="状态筛选" clearable style="width: 120px" @change="handleSearch">
+        <el-select v-model="statusFilter" placeholder="状态筛选" clearable class="filter-select" @change="handleSearch">
           <el-option label="全部" value="" />
           <el-option label="运行中" value="running" />
           <el-option label="成功" value="success" />
           <el-option label="失败" value="failed" />
           <el-option label="已取消" value="cancelled" />
         </el-select>
-        <el-select v-model="typeFilter" placeholder="类型筛选" clearable style="width: 120px" @change="handleSearch">
+        <el-select v-model="typeFilter" placeholder="类型筛选" clearable class="filter-select" @change="handleSearch">
           <el-option label="全部" value="" />
           <el-option label="对话" value="chat" />
           <el-option label="脚本" value="script" />
@@ -29,7 +29,7 @@
           range-separator="至"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
-          style="width: 260px"
+          class="date-picker"
           @change="handleSearch"
         />
       </div>
@@ -431,8 +431,23 @@ const formatDuration = (duration?: number) => {
 
 .header-left {
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-3);
   flex-wrap: wrap;
+}
+
+.search-input {
+  width: 180px;
+  max-width: 100%;
+}
+
+.filter-select {
+  width: 110px;
+  max-width: 100%;
+}
+
+.date-picker {
+  width: 240px;
+  max-width: 100%;
 }
 
 .header-right {

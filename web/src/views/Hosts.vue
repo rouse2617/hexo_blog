@@ -441,7 +441,8 @@ const handleImportSubmit = async (hosts: Omit<Host, 'id' | 'createdAt' | 'update
 }
 
 .search-input {
-  width: 280px;
+  width: 240px;
+  max-width: 100%;
 }
 
 .view-toggle :deep(.el-radio-button__inner) {

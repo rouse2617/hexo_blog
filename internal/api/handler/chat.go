@@ -16,16 +16,23 @@ import (
 
 // ChatHandler 对话处理器
 type ChatHandler struct {
-	agent       *agent.Agent
-	sessionRepo repository.SessionRepository
+	agent          *agent.Agent
+	sessionRepo    repository.SessionRepository
+	enableThinking bool // 是否启用思考过程
 }
 
 // NewChatHandler 创建对话处理器
-func NewChatHandler(agent *agent.Agent, sessionRepo repository.SessionRepository) *ChatHandler {
+func NewChatHandler(agent *agent.Agent, sessionRepo repository.SessionRepository, enableThinking bool) *ChatHandler {
 	return &ChatHandler{
-		agent:       agent,
-		sessionRepo: sessionRepo,
+		agent:          agent,
+		sessionRepo:    sessionRepo,
+		enableThinking: enableThinking,
 	}
+}
+
+// SetEnableThinking 设置是否启用思考过程
+func (h *ChatHandler) SetEnableThinking(enable bool) {
+	h.enableThinking = enable
 }
 
 // ChatRequest 对话请求
@@ -44,6 +51,7 @@ type ChatResponseData struct {
 	SessionID string                 `json:"session_id"`
 	Reply     string                 `json:"reply"`
 	ToolCalls []agent.ToolCallRecord `json:"tool_calls,omitempty"`
+	Thinking  string                 `json:"thinking,omitempty"` // 思考过程
 }
 
 // Chat 对话接口
@@ -110,11 +118,23 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 	}
 
 	// 普通响应
-	resp, err := h.agent.Chat(c.Request.Context(), agent.ChatRequest{
-		SessionID: sessionID,
-		Message:   req.Message,
-		Hosts:     hosts,
-	})
+	var resp *agent.ChatResponse
+	var err error
+
+	// 根据配置选择是否使用思考过程
+	if h.enableThinking {
+		resp, err = h.agent.ChatWithThinking(c.Request.Context(), agent.ChatRequest{
+			SessionID: sessionID,
+			Message:   req.Message,
+			Hosts:     hosts,
+		})
+	} else {
+		resp, err = h.agent.Chat(c.Request.Context(), agent.ChatRequest{
+			SessionID: sessionID,
+			Message:   req.Message,
+			Hosts:     hosts,
+		})
+	}
 
 	if err != nil {
 		LLMError(c, "对话失败: "+err.Error())
@@ -160,6 +180,7 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 		SessionID: resp.SessionID,
 		Reply:     resp.Reply,
 		ToolCalls: resp.ToolCalls,
+		Thinking:  resp.Thinking, // 包含思考过程
 	})
 }
 
@@ -226,76 +247,147 @@ func (h *ChatHandler) chatStream(c *gin.Context, req ChatRequest) {
 	var assistantContent strings.Builder
 	var toolCalls []model.ToolCall
 
-	err := h.agent.ChatStream(c.Request.Context(), agent.ChatRequest{
-		SessionID: sessionID,
-		Message:   req.Message,
-		Hosts:     hosts,
-	}, func(chunk agent.StreamChunk) {
-		// 发送 SSE 事件
-		switch chunk.Type {
-		case "thinking":
-			c.SSEvent("thinking", gin.H{
-				"step":    chunk.Step,
-				"status":  chunk.Status,
-				"content": chunk.Content,
-			})
-		case "content":
-			assistantContent.WriteString(chunk.Content)
-			c.SSEvent("content", gin.H{"content": chunk.Content})
-		case "tool_call":
-			c.SSEvent("tool_call", gin.H{
-				"id":     chunk.ToolCall.ID,
-				"tool":   chunk.ToolCall.Function.Name,
-				"params": chunk.ToolCall.Function.Arguments,
-				"status": chunk.Status,
-			})
-		case "tool_result":
-			if chunk.ToolResult != nil {
-				toolCalls = append(toolCalls, model.ToolCall{
-					Tool:   chunk.ToolResult.Tool,
-					Params: chunk.ToolResult.Params,
-					Result: chunk.ToolResult.Result,
-					Error:  chunk.ToolResult.Error,
+	var err error
+	// 根据配置选择是否使用思考过程
+	if h.enableThinking {
+		err = h.agent.ChatStreamWithThinking(c.Request.Context(), agent.ChatRequest{
+			SessionID: sessionID,
+			Message:   req.Message,
+			Hosts:     hosts,
+		}, func(chunk agent.StreamChunk) {
+			// 发送 SSE 事件
+			switch chunk.Type {
+			case "thinking":
+				c.SSEvent("thinking", gin.H{
+					"step":    chunk.Step,
+					"status":  chunk.Status,
+					"content": chunk.Content,
 				})
-				c.SSEvent("tool_result", gin.H{
-					"id":     chunk.ToolResult.ID,
-					"tool":   chunk.ToolResult.Tool,
-					"params": chunk.ToolResult.Params,
-					"result": chunk.ToolResult.Result,
-					"error":  chunk.ToolResult.Error,
+			case "content":
+				assistantContent.WriteString(chunk.Content)
+				c.SSEvent("content", gin.H{"content": chunk.Content})
+			case "tool_call":
+				c.SSEvent("tool_call", gin.H{
+					"id":     chunk.ToolCall.ID,
+					"tool":   chunk.ToolCall.Function.Name,
+					"params": chunk.ToolCall.Function.Arguments,
+					"status": chunk.Status,
 				})
-			}
-		case "done":
-			// 保存助手回复
-			if sessionID != "" && assistantContent.Len() > 0 {
-				assistantMsg := &model.Message{
-					ID:        uuid.New().String(),
-					SessionID: sessionID,
-					Role:      model.RoleAssistant,
-					Content:   assistantContent.String(),
-					ToolCalls: toolCalls,
-					CreatedAt: time.Now(),
+			case "tool_result":
+				if chunk.ToolResult != nil {
+					toolCalls = append(toolCalls, model.ToolCall{
+						Tool:   chunk.ToolResult.Tool,
+						Params: chunk.ToolResult.Params,
+						Result: chunk.ToolResult.Result,
+						Error:  chunk.ToolResult.Error,
+					})
+					c.SSEvent("tool_result", gin.H{
+						"id":     chunk.ToolResult.ID,
+						"tool":   chunk.ToolResult.Tool,
+						"params": chunk.ToolResult.Params,
+						"result": chunk.ToolResult.Result,
+						"error":  chunk.ToolResult.Error,
+					})
 				}
-				h.sessionRepo.AddMessage(sessionID, assistantMsg)
+			case "done":
+				// 保存助手回复
+				if sessionID != "" && assistantContent.Len() > 0 {
+					assistantMsg := &model.Message{
+						ID:        uuid.New().String(),
+						SessionID: sessionID,
+						Role:      model.RoleAssistant,
+						Content:   assistantContent.String(),
+						ToolCalls: toolCalls,
+						CreatedAt: time.Now(),
+					}
+					h.sessionRepo.AddMessage(sessionID, assistantMsg)
 
-				// 更新会话标题（如果是第一条消息）
-				session, _ := h.sessionRepo.GetByID(sessionID)
-				if session != nil && (session.Title == "" || strings.HasPrefix(session.Title, "会话 ")) {
-					newTitle := strings.TrimSpace(req.Message)
-					if len(newTitle) > 50 {
-						newTitle = newTitle[:50] + "..."
-					}
-					if newTitle != "" {
-						h.sessionRepo.UpdateTitle(sessionID, newTitle)
+					// 更新会话标题（如果是第一条消息）
+					session, _ := h.sessionRepo.GetByID(sessionID)
+					if session != nil && (session.Title == "" || strings.HasPrefix(session.Title, "会话 ")) {
+						newTitle := strings.TrimSpace(req.Message)
+						if len(newTitle) > 50 {
+							newTitle = newTitle[:50] + "..."
+						}
+						if newTitle != "" {
+							h.sessionRepo.UpdateTitle(sessionID, newTitle)
+						}
 					}
 				}
+				c.SSEvent("done", gin.H{"session_id": sessionID})
+			case "error":
+				c.SSEvent("error", gin.H{"error": chunk.Error})
 			}
-			c.SSEvent("done", gin.H{"session_id": sessionID})
-		case "error":
-			c.SSEvent("error", gin.H{"error": chunk.Error})
+			c.Writer.Flush()
+		})
+	} else {
+		err = h.agent.ChatStream(c.Request.Context(), agent.ChatRequest{
+				SessionID: sessionID,
+				Message:   req.Message,
+				Hosts:     hosts,
+			}, func(chunk agent.StreamChunk) {
+				// 发送 SSE 事件
+				switch chunk.Type {
+				case "thinking":
+					// 不启用思考时不发送
+				case "content":
+					assistantContent.WriteString(chunk.Content)
+					c.SSEvent("content", gin.H{"content": chunk.Content})
+				case "tool_call":
+					c.SSEvent("tool_call", gin.H{
+						"id":     chunk.ToolCall.ID,
+						"tool":   chunk.ToolCall.Function.Name,
+						"params": chunk.ToolCall.Function.Arguments,
+						"status": chunk.Status,
+					})
+				case "tool_result":
+					if chunk.ToolResult != nil {
+						toolCalls = append(toolCalls, model.ToolCall{
+							Tool:   chunk.ToolResult.Tool,
+							Params: chunk.ToolResult.Params,
+							Result: chunk.ToolResult.Result,
+							Error:  chunk.ToolResult.Error,
+						})
+						c.SSEvent("tool_result", gin.H{
+							"id":     chunk.ToolResult.ID,
+							"tool":   chunk.ToolResult.Tool,
+							"params": chunk.ToolResult.Params,
+							"result": chunk.ToolResult.Result,
+							"error":  chunk.ToolResult.Error,
+						})
+					}
+				case "done":
+					// 保存助手回复
+					if sessionID != "" && assistantContent.Len() > 0 {
+						assistantMsg := &model.Message{
+							ID:        uuid.New().String(),
+							SessionID: sessionID,
+							Role:      model.RoleAssistant,
+							Content:   assistantContent.String(),
+							ToolCalls: toolCalls,
+							CreatedAt: time.Now(),
+						}
+						h.sessionRepo.AddMessage(sessionID, assistantMsg)
+
+						// 更新会话标题（如果是第一条消息）
+						session, _ := h.sessionRepo.GetByID(sessionID)
+						if session != nil && (session.Title == "" || strings.HasPrefix(session.Title, "会话 ")) {
+							newTitle := strings.TrimSpace(req.Message)
+							if len(newTitle) > 50 {
+								newTitle = newTitle[:50] + "..."
+							}
+							if newTitle != "" {
+								h.sessionRepo.UpdateTitle(sessionID, newTitle)
+							}
+						}
+					}
+					c.SSEvent("done", gin.H{"session_id": sessionID})
+				case "error":
+					c.SSEvent("error", gin.H{"error": chunk.Error})
+				}
+				c.Writer.Flush()
+			})
 		}
-		c.Writer.Flush()
-	})
 
 	if err != nil {
 		c.SSEvent("error", gin.H{"error": err.Error()})

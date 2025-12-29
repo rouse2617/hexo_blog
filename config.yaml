@@ -3,8 +3,8 @@
 server:
   addr: ":8080"
   mode: debug  # debug / release
- 
- 
+
+
 llm:
   endpoint: "https://alex-ewoeo-bigeowifo.hf.space/api/coding/paas/v4"
   model: "glm-4.7"
@@ -53,8 +53,26 @@ scripts:
 
 agent:
   max_loops: 10
+  timeout: 300              # 单次请求超时（秒）
+  prompt_version: enhanced   # 提示词版本: standard / enhanced
+  enable_thinking: true     # 启用思考过程输出
 
 log:
   level: info    # debug / info / warn / error
   format: json   # json / text
   output: stdout # stdout / 文件路径
+
+# MCP 集成配置（可选）
+# MCP (Model Context Protocol) 允许动态加载外部工具
+mcp:
+  # 示例：文件系统 MCP server（用于读取本地文件）
+  # - name: filesystem
+  #   url: http://localhost:3000
+  #   timeout: 30
+  #   enabled: false
+
+  # 示例：自定义 MCP server
+  # - name: custom-tools
+  #   url: http://localhost:3001
+  #   timeout: 60
+  #   enabled: false

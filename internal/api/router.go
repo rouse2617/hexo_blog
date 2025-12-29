@@ -14,19 +14,20 @@ import (
 
 // RouterConfig 路由配置
 type RouterConfig struct {
-	Agent        *agent.Agent
-	ToolRegistry *tool.Registry
-	SSHPool      *ssh.Pool
-	PolicyStore  *security.PolicyStore
-	AuditLogger  *security.AuditLogger
-	HostRepo     repository.HostRepository
-	SessionRepo  repository.SessionRepository
-	GroupRepo    repository.GroupRepository
-	ConfigRepo   repository.ConfigRepository
-	AnalysisRepo repository.AnalysisRepository
-	LLMClient    *llm.OpenAIClient
-	Version      string
-	Mode         string // debug / release
+	Agent          *agent.Agent
+	ToolRegistry   *tool.Registry
+	SSHPool        *ssh.Pool
+	PolicyStore    *security.PolicyStore
+	AuditLogger    *security.AuditLogger
+	HostRepo       repository.HostRepository
+	SessionRepo    repository.SessionRepository
+	GroupRepo      repository.GroupRepository
+	ConfigRepo     repository.ConfigRepository
+	AnalysisRepo   repository.AnalysisRepository
+	LLMClient      *llm.OpenAIClient
+	Version        string
+	Mode           string // debug / release
+	EnableThinking bool   // 是否启用思考过程
 }
 
 // NewRouter 创建路由
@@ -44,7 +45,7 @@ func NewRouter(cfg RouterConfig) *gin.Engine {
 	r.Use(CORSMiddleware())
 
 	// 创建 handlers
-	chatHandler := handler.NewChatHandler(cfg.Agent, cfg.SessionRepo)
+	chatHandler := handler.NewChatHandler(cfg.Agent, cfg.SessionRepo, cfg.EnableThinking)
 	hostHandler := handler.NewHostHandler(cfg.SSHPool, cfg.HostRepo, cfg.GroupRepo)
 	toolHandler := handler.NewToolHandler(cfg.ToolRegistry, cfg.SSHPool, cfg.ConfigRepo)
 	systemHandler := handler.NewSystemHandler(cfg.Version, cfg.PolicyStore, cfg.AuditLogger, cfg.ConfigRepo)

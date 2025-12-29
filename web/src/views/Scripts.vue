@@ -7,7 +7,7 @@
           placeholder="搜索脚本名称"
           :prefix-icon="Search"
           clearable
-          style="width: 250px"
+          class="search-input"
           @input="handleSearch"
         />
       </div>
@@ -241,6 +241,19 @@ const handleFormSubmit = async (data: Omit<Script, 'id' | 'createdAt' | 'updated
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: var(--spacing-3);
+}
+
+.header-left {
+  display: flex;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.search-input {
+  width: 220px;
+  max-width: 100%;
 }
 
 .header-right {
