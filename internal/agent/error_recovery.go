@@ -258,25 +258,41 @@ func (e *ErrorRecoveryEngine) tryAutoRecovery(
 	record ToolCallRecord,
 	strategy *ErrorRecoveryStrategy,
 ) string {
+	if agent == nil || agent.sshPool == nil {
+		return ""
+	}
+
 	var results []string
 
+	// 获取主机
+	var host string
+	if h, ok := record.Params["host"]; ok {
+		host = fmt.Sprintf("%v", h)
+	}
+	if host == "" {
+		return ""
+	}
+
 	for _, cmd := range strategy.RecoveryCommands {
-		// 替换 {host} 占位符
-		if host, ok := record.Params["host"]; ok {
-			cmd = strings.ReplaceAll(cmd, "{host}", fmt.Sprintf("%v", host))
-		}
+		// 替换占位符
+		cmd = strings.ReplaceAll(cmd, "{host}", host)
 		if processName, ok := record.Params["process_name"]; ok {
 			cmd = strings.ReplaceAll(cmd, "{process_name}", fmt.Sprintf("%v", processName))
 		}
 
-		// 执行恢复命令
-		// 这里需要调用 agent 的 SSH 执行能力
-		// 简化实现，记录日志
-		logger.Info("自动恢复命令", zap.String("command", cmd))
-		results = append(results, fmt.Sprintf("执行: %s", cmd))
+		logger.Debug("执行自动恢复命令", zap.String("host", host), zap.String("command", cmd))
 
-		// TODO: 实际执行 SSH 命令并收集结果
-		// 这需要访问 agent.sshPool 并执行命令
+		// 实际执行 SSH 命令
+		output, err := agent.sshPool.Exec(host, cmd)
+		if err != nil {
+			results = append(results, fmt.Sprintf("执行 %s 失败: %v", cmd, err))
+		} else {
+			// 截断过长的输出
+			if len(output) > 500 {
+				output = output[:500] + "...(truncated)"
+			}
+			results = append(results, fmt.Sprintf("执行 %s:\n%s", cmd, output))
+		}
 	}
 
 	if len(results) > 0 {

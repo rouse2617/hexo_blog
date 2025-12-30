@@ -15,14 +15,71 @@ import (
 	"go.uber.org/zap"
 )
 
+// ExecuteToolCalls 执行工具调用的共享实现
+func ExecuteToolCalls(ctx context.Context, registry *tool.Registry, sshPool *ssh.Pool, toolCalls []llm.ToolCall, hosts []string) ([]llm.Message, []ToolCallRecord) {
+	var toolMessages []llm.Message
+	var records []ToolCallRecord
+
+	toolCtx := &tool.Context{
+		Hosts:   hosts,
+		SSH:     sshPool,
+		Timeout: 30 * time.Second,
+	}
+
+	for _, tc := range toolCalls {
+		var params map[string]interface{}
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
+			logger.Error("解析工具参数失败", zap.Error(err), zap.String("tool", tc.Function.Name))
+			record := ToolCallRecord{
+				ID:     tc.ID,
+				Tool:   tc.Function.Name,
+				Params: nil,
+				Error:  fmt.Sprintf("参数解析失败: %v", err),
+			}
+			records = append(records, record)
+			toolMessages = append(toolMessages, llm.NewToolMessage(tc.ID, tc.Function.Name, fmt.Sprintf("错误: 参数解析失败 - %v", err)))
+			continue
+		}
+
+		logger.Debug("执行工具", zap.String("tool", tc.Function.Name), zap.Any("params", params))
+
+		result, err := registry.Execute(toolCtx, tc.Function.Name, params)
+		record := ToolCallRecord{
+			ID:     tc.ID,
+			Tool:   tc.Function.Name,
+			Params: params,
+		}
+
+		var resultStr string
+		if err != nil {
+			record.Error = err.Error()
+			resultStr = fmt.Sprintf("执行错误: %v", err)
+		} else if !result.Success {
+			record.Error = result.Error
+			resultStr = fmt.Sprintf("执行失败: %s", result.Error)
+		} else {
+			resultBytes, _ := json.Marshal(result.Data)
+			record.Result = string(resultBytes)
+			resultStr = fmt.Sprintf("执行成功: %s\n结果: %s", result.Message, string(resultBytes))
+		}
+
+		records = append(records, record)
+		toolMessages = append(toolMessages, llm.NewToolMessage(tc.ID, tc.Function.Name, resultStr))
+	}
+
+	return toolMessages, records
+}
+
 // ReActAgent 基于 ReAct (Reasoning + Acting) 模式的 Agent
 // ReAct 模式: Thought -> Action -> Observation 循环
 type ReActAgent struct {
-	registry *tool.Registry
-	llmClient llm.Client
-	sshPool   *ssh.Pool
-	maxLoops  int
-	timeout   time.Duration
+	registry         *tool.Registry
+	llmClient        llm.Client
+	sshPool          *ssh.Pool
+	maxLoops         int
+	timeout          time.Duration
+	parallelExecutor *ParallelExecutor
+	toolCache        *ToolCache
 }
 
 // ReActStep ReAct 步骤
@@ -36,17 +93,27 @@ type ReActStep struct {
 
 // NewReActAgent 创建 ReAct Agent
 func NewReActAgent(registry *tool.Registry, llmClient llm.Client, sshPool *ssh.Pool) *ReActAgent {
+	toolCache := NewToolCache(30 * time.Second)
 	return &ReActAgent{
-		registry:  registry,
-		llmClient: llmClient,
-		sshPool:   sshPool,
-		maxLoops:  10,
-		timeout:   5 * time.Minute,
+		registry:         registry,
+		llmClient:        llmClient,
+		sshPool:          sshPool,
+		maxLoops:         10,
+		timeout:          5 * time.Minute,
+		parallelExecutor: NewParallelExecutor(registry, sshPool, toolCache),
+		toolCache:        toolCache,
 	}
 }
 
 // ChatReAct 使用 ReAct 模式进行对话
 func (a *ReActAgent) ChatReAct(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	if a == nil {
+		return nil, fmt.Errorf("ReActAgent 未初始化")
+	}
+	if a.registry == nil || a.llmClient == nil {
+		return nil, fmt.Errorf("ReActAgent 依赖未初始化")
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 
@@ -76,7 +143,7 @@ func (a *ReActAgent) ChatReAct(ctx context.Context, req ChatRequest) (*ChatRespo
 	var finalResp *llm.ChatResponse
 
 	for i := 0; i < a.maxLoops; i++ {
-		logger.Info("ReAct 循环", zap.Int("loop", i+1))
+		logger.Debug("ReAct 循环", zap.Int("loop", i+1))
 
 		// 调用 LLM
 		resp, err := a.llmClient.ChatWithTools(ctx, messages, toolDefs)
@@ -93,26 +160,29 @@ func (a *ReActAgent) ChatReAct(ctx context.Context, req ChatRequest) (*ChatRespo
 				Content:   thought,
 				Timestamp: time.Now().Unix(),
 			})
-			logger.Info("ReAct 思考", zap.String("thought", thought))
+			logger.Debug("ReAct 思考", zap.String("thought", thought))
 		}
 
 		// 如果没有工具调用，说明准备好给出最终答案
 		if !resp.HasToolCalls() {
-			logger.Info("ReAct 完成，无工具调用")
+			logger.Debug("ReAct 完成，无工具调用")
 			break
 		}
+
+		// 优化工具调用（批量合并）
+		optimizedCalls := optimizeToolCalls(resp.Message.ToolCalls, req.Hosts)
 
 		// 记录行动步骤
 		reactSteps = append(reactSteps, ReActStep{
 			Phase:     "action",
-			Content:   fmt.Sprintf("执行 %d 个工具调用", len(resp.Message.ToolCalls)),
-			ToolCalls: resp.Message.ToolCalls,
+			Content:   fmt.Sprintf("执行 %d 个工具调用", len(optimizedCalls)),
+			ToolCalls: optimizedCalls,
 			Timestamp: time.Now().Unix(),
 		})
-		logger.Info("ReAct 行动", zap.Int("tool_calls", len(resp.Message.ToolCalls)))
+		logger.Debug("ReAct 行动", zap.Int("tool_calls", len(optimizedCalls)))
 
 		// 执行工具调用
-		toolResults, records := a.executeToolCalls(ctx, resp.Message.ToolCalls, req.Hosts)
+		toolResults, records := a.executeToolCalls(ctx, optimizedCalls, req.Hosts)
 		toolCallRecords = append(toolCallRecords, records...)
 
 		// 记录观察结果
@@ -134,11 +204,15 @@ func (a *ReActAgent) ChatReAct(ctx context.Context, req ChatRequest) (*ChatRespo
 				Content:    resultStr,
 				Timestamp:  time.Now().Unix(),
 			})
-			logger.Info("ReAct 观察", zap.String("tool", record.Tool), zap.String("result", resultStr))
+			logger.Debug("ReAct 观察", zap.String("tool", record.Tool), zap.String("result", resultStr))
 		}
 
 		// 将助手消息和工具结果添加到对话历史
 		messages = append(messages, resp.Message)
+		// 更新消息中的工具调用为优化后的版本
+		if len(optimizedCalls) != len(resp.Message.ToolCalls) {
+			messages[len(messages)-1].ToolCalls = optimizedCalls
+		}
 		messages = append(messages, toolResults...)
 	}
 
@@ -289,76 +363,9 @@ func (a *ReActAgent) formatReActSteps(steps []ReActStep) string {
 	return sb.String()
 }
 
-// executeToolCalls 执行工具调用
+// executeToolCalls 执行工具调用（使用并行执行器）
 func (a *ReActAgent) executeToolCalls(ctx context.Context, toolCalls []llm.ToolCall, hosts []string) ([]llm.Message, []ToolCallRecord) {
-	var toolMessages []llm.Message
-	var records []ToolCallRecord
-
-	// 创建工具执行上下文
-	toolCtx := &tool.Context{
-		Hosts:   hosts,
-		SSH:     a.sshPool,
-		Timeout: 30 * time.Second,
-	}
-
-	for _, tc := range toolCalls {
-		// 解析参数
-		var params map[string]interface{}
-		if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
-			logger.Error("解析工具参数失败",
-				zap.Error(err),
-				zap.String("tool", tc.Function.Name),
-			)
-
-			record := ToolCallRecord{
-				ID:     tc.ID,
-				Tool:   tc.Function.Name,
-				Params: nil,
-				Error:  fmt.Sprintf("参数解析失败: %v", err),
-			}
-			records = append(records, record)
-
-			toolMessages = append(toolMessages, llm.NewToolMessage(
-				tc.ID,
-				tc.Function.Name,
-				fmt.Sprintf("错误: 参数解析失败 - %v", err),
-			))
-			continue
-		}
-
-		logger.Info("ReAct 执行工具",
-			zap.String("tool", tc.Function.Name),
-			zap.Any("params", params),
-		)
-
-		// 执行工具
-		result, err := a.registry.Execute(toolCtx, tc.Function.Name, params)
-
-		record := ToolCallRecord{
-			ID:     tc.ID,
-			Tool:   tc.Function.Name,
-			Params: params,
-		}
-
-		var resultStr string
-		if err != nil {
-			record.Error = err.Error()
-			resultStr = fmt.Sprintf("执行错误: %v", err)
-		} else if !result.Success {
-			record.Error = result.Error
-			resultStr = fmt.Sprintf("执行失败: %s", result.Error)
-		} else {
-			// 序列化结果
-			resultBytes, _ := json.Marshal(result.Data)
-			record.Result = string(resultBytes)
-			resultStr = fmt.Sprintf("执行成功: %s\n结果: %s", result.Message, string(resultBytes))
-		}
-
-		records = append(records, record)
-		toolMessages = append(toolMessages, llm.NewToolMessage(tc.ID, tc.Function.Name, resultStr))
-	}
-
-	return toolMessages, records
+	return a.parallelExecutor.ExecuteParallel(ctx, toolCalls, hosts)
 }
 
 // SetMaxLoops 设置最大循环次数

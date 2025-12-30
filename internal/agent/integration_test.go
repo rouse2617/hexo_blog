@@ -3,20 +3,22 @@ package agent
 import (
 	"context"
 	"testing"
+	"time"
 
 	"ai-ops/internal/llm"
 	"ai-ops/internal/ssh"
 	"ai-ops/internal/tool"
 )
 
+const defaultTimeout = 30 * time.Second
+
 // TestAgentWithErrorRecovery 测试 Agent 集成错误恢复
 func TestAgentWithErrorRecovery(t *testing.T) {
 	// 创建 SSH 连接池
-	sshPool := ssh.NewPool()
+	sshPool := ssh.NewPool(ssh.Config{})
 
 	// 创建工具注册表
 	toolRegistry := tool.NewRegistry()
-	toolRegistry.RegisterBuiltinTools()
 
 	// 创建 mock LLM 客户端
 	llmClient := &mockLLMClient{}
@@ -42,9 +44,8 @@ func TestAgentWithErrorRecovery(t *testing.T) {
 // TestErrorRecoveryIntegration 测试错误恢复集成
 func TestErrorRecoveryIntegration(t *testing.T) {
 	// 准备测试环境
-	sshPool := ssh.NewPool()
+	sshPool := ssh.NewPool(ssh.Config{})
 	toolRegistry := tool.NewRegistry()
-	toolRegistry.RegisterBuiltinTools()
 	llmClient := &mockLLMClient{}
 
 	cfg := Config{
@@ -141,7 +142,7 @@ func (m *mockLLMClient) ChatWithTools(ctx context.Context, messages []llm.Messag
 	}, nil
 }
 
-func (m *mockLLMClient) ChatStreamWithTools(ctx context.Context, messages []llm.Message, tools []llm.ToolDef, callback func(chunk llm.StreamChunk)) error {
+func (m *mockLLMClient) ChatStreamWithTools(ctx context.Context, messages []llm.Message, tools []llm.ToolDef, callback llm.StreamCallback) error {
 	callback(llm.StreamChunk{
 		Type:    "content",
 		Content: "Mock",
@@ -159,12 +160,27 @@ func (m *mockLLMClient) Chat(ctx context.Context, messages []llm.Message) (*llm.
 	}, nil
 }
 
+func (m *mockLLMClient) ChatStream(ctx context.Context, messages []llm.Message, callback llm.StreamCallback) error {
+	callback(llm.StreamChunk{
+		Type:    "content",
+		Content: "Mock",
+	})
+	callback(llm.StreamChunk{Type: "done"})
+	return nil
+}
+
+func (m *mockLLMClient) GetModel() string {
+	return "mock-model"
+}
+
+func (m *mockLLMClient) SetModel(model string) {}
+
 // TestErrorRecoveryLogging 测试错误恢复日志
 func TestErrorRecoveryLogging(t *testing.T) {
 	engine := NewErrorRecoveryEngine()
 
 	log := RecoveryLog{
-		Timestamp:   testTime(),
+		Timestamp:   time.Now(),
 		ToolName:    "check_cpu",
 		Error:       "connection refused",
 		Strategy:    "alternative_tool",
@@ -177,16 +193,10 @@ func TestErrorRecoveryLogging(t *testing.T) {
 	t.Log("✓ Recovery logging works")
 }
 
-func testTime() interface{} {
-	// 简化的时间返回
-	return interface{}(nil)
-}
-
 // BenchmarkErrorRecoveryInAgent 性能测试
 func BenchmarkErrorRecoveryInAgent(b *testing.B) {
-	sshPool := ssh.NewPool()
+	sshPool := ssh.NewPool(ssh.Config{})
 	toolRegistry := tool.NewRegistry()
-	toolRegistry.RegisterBuiltinTools()
 	llmClient := &mockLLMClient{}
 
 	cfg := Config{

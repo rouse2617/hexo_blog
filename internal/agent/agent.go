@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -16,22 +15,26 @@ import (
 
 // Agent AI 运维助手
 type Agent struct {
-	llmClient     llm.Client
-	toolRegistry  *tool.Registry
-	sshPool       *ssh.Pool
-	maxLoops      int
-	timeout       time.Duration
-	promptVersion string // 提示词版本: standard / enhanced
-	errorRecovery *ErrorRecoveryEngine
-	reactAgent    *ReActAgent // ReAct Agent 实例
+	llmClient        llm.Client
+	toolRegistry     *tool.Registry
+	sshPool          *ssh.Pool
+	maxLoops         int
+	timeout          time.Duration
+	promptVersion    string // 提示词版本: standard / enhanced
+	errorRecovery    *ErrorRecoveryEngine
+	reactAgent       *ReActAgent          // ReAct Agent 实例
+	parallelExecutor *ParallelExecutor    // 并行执行器
+	toolCache        *ToolCache           // 工具缓存
 }
 
 // Config Agent 配置
 type Config struct {
 	MaxLoops       int
 	Timeout        time.Duration
-	PromptVersion  string // 提示词版本: standard / enhanced
-	EnableThinking bool   // 启用思考过程
+	PromptVersion  string        // 提示词版本: standard / enhanced
+	EnableThinking bool          // 启用思考过程
+	CacheTTL       time.Duration // 工具缓存 TTL
+	MaxConcurrent  int           // 最大并发工具执行数
 }
 
 // NewAgent 创建 Agent
@@ -45,16 +48,31 @@ func NewAgent(llmClient llm.Client, toolRegistry *tool.Registry, sshPool *ssh.Po
 	if cfg.PromptVersion == "" {
 		cfg.PromptVersion = "enhanced" // 默认使用增强版
 	}
+	if cfg.CacheTTL == 0 {
+		cfg.CacheTTL = 30 * time.Second
+	}
+	if cfg.MaxConcurrent == 0 {
+		cfg.MaxConcurrent = 10
+	}
+
+	// 创建工具缓存
+	toolCache := NewToolCache(cfg.CacheTTL)
+
+	// 创建并行执行器
+	parallelExecutor := NewParallelExecutor(toolRegistry, sshPool, toolCache)
+	parallelExecutor.SetMaxConcurrent(cfg.MaxConcurrent)
 
 	return &Agent{
-		llmClient:     llmClient,
-		toolRegistry:  toolRegistry,
-		sshPool:       sshPool,
-		maxLoops:      cfg.MaxLoops,
-		timeout:       cfg.Timeout,
-		promptVersion: cfg.PromptVersion,
-		errorRecovery: NewErrorRecoveryEngine(),
-		reactAgent:    NewReActAgent(toolRegistry, llmClient, sshPool),
+		llmClient:        llmClient,
+		toolRegistry:     toolRegistry,
+		sshPool:          sshPool,
+		maxLoops:         cfg.MaxLoops,
+		timeout:          cfg.Timeout,
+		promptVersion:    cfg.PromptVersion,
+		errorRecovery:    NewErrorRecoveryEngine(),
+		reactAgent:       NewReActAgent(toolRegistry, llmClient, sshPool),
+		parallelExecutor: parallelExecutor,
+		toolCache:        toolCache,
 	}
 }
 
@@ -87,6 +105,13 @@ type ToolCallRecord struct {
 
 // Chat 对话
 func (a *Agent) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	if a == nil {
+		return nil, fmt.Errorf("Agent 未初始化")
+	}
+	if a.llmClient == nil || a.toolRegistry == nil {
+		return nil, fmt.Errorf("Agent 依赖未初始化")
+	}
+
 	// 设置超时
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
@@ -185,125 +210,45 @@ func (a *Agent) buildMessages(req ChatRequest) []llm.Message {
 	return messages
 }
 
-// executeToolCalls 执行工具调用（带错误恢复）
+// executeToolCalls 执行工具调用（带错误恢复和并行执行）
 func (a *Agent) executeToolCalls(ctx context.Context, toolCalls []llm.ToolCall, hosts []string) ([]llm.Message, []ToolCallRecord) {
-	var toolMessages []llm.Message
-	var records []ToolCallRecord
+	// 使用并行执行器
+	toolMessages, records := a.parallelExecutor.ExecuteParallel(ctx, toolCalls, hosts)
 
-	// 创建工具执行上下文
-	toolCtx := &tool.Context{
-		Hosts:   hosts,
-		SSH:     a.sshPool,
-		Timeout: 30 * time.Second,
-	}
-
-	for _, tc := range toolCalls {
-		// 解析参数
-		var params map[string]interface{}
-		if err := json.Unmarshal([]byte(tc.Function.Arguments), &params); err != nil {
-			logger.Error("解析工具参数失败", zap.Error(err), zap.String("tool", tc.Function.Name))
-
-			record := ToolCallRecord{
-				ID:     tc.ID,
-				Tool:   tc.Function.Name,
-				Params: nil,
-				Error:  fmt.Sprintf("参数解析失败: %v", err),
-			}
-			records = append(records, record)
-
-			toolMessages = append(toolMessages, llm.NewToolMessage(
-				tc.ID,
-				tc.Function.Name,
-				fmt.Sprintf("错误: 参数解析失败 - %v", err),
-			))
+	// 对失败的工具调用尝试错误恢复
+	for i, record := range records {
+		if record.Error == "" {
 			continue
 		}
 
-		logger.Info("执行工具",
-			zap.String("tool", tc.Function.Name),
-			zap.Any("params", params),
-		)
+		shouldRetry, newCalls, recoveryPrompt, _ := a.errorRecovery.RecoverFromError(ctx, a, record, nil)
 
-		// 执行工具
-		result, err := a.toolRegistry.Execute(toolCtx, tc.Function.Name, params)
-
-		record := ToolCallRecord{
-			ID:     tc.ID,
-			Tool:   tc.Function.Name,
-			Params: params,
+		if recoveryPrompt != "" {
+			logger.Debug("错误恢复提示", zap.String("tool", record.Tool), zap.String("prompt", recoveryPrompt))
 		}
 
-		var resultStr string
-		if err != nil || !result.Success {
-			// 工具执行失败，尝试错误恢复
-			if err != nil {
-				record.Error = err.Error()
-			} else {
-				record.Error = result.Error
-			}
+		// 尝试替代工具
+		if shouldRetry && len(newCalls) > 0 {
+			altMessages, altRecords := a.parallelExecutor.ExecuteParallel(ctx, newCalls, hosts)
+			for j, altRecord := range altRecords {
+				if altRecord.Error == "" {
+					// 替代工具成功
+					records[i].Result = fmt.Sprintf("原工具失败，使用替代方案 %s 成功：%s", altRecord.Tool, altRecord.Result)
+					records[i].Error = ""
+					toolMessages[i] = altMessages[j]
 
-			// 尝试错误恢复
-			shouldRetry, newCalls, recoveryPrompt, recoveryErr := a.errorRecovery.RecoverFromError(
-				ctx, a, record, nil,
-			)
-
-			if recoveryPrompt != "" {
-				resultStr = recoveryPrompt
-				logger.Info("错误恢复提示", zap.String("prompt", recoveryPrompt))
-			} else if recoveryErr != nil {
-				resultStr = fmt.Sprintf("错误恢复失败: %v\n原始错误: %s", recoveryErr, record.Error)
-			} else {
-				resultStr = fmt.Sprintf("执行错误: %s", record.Error)
-			}
-
-			// 如果有替代工具，尝试执行
-			if shouldRetry && len(newCalls) > 0 {
-				logger.Info("尝试使用替代工具", zap.Int("count", len(newCalls)))
-				for _, newCall := range newCalls {
-					// 解析新工具参数
-					var newParams map[string]interface{}
-					json.Unmarshal([]byte(newCall.Function.Arguments), &newParams)
-
-					// 执行替代工具
-					newResult, newErr := a.toolRegistry.Execute(toolCtx, newCall.Function.Name, newParams)
-
-					if newErr == nil && newResult.Success {
-						// 替代工具成功
-						resultBytes, _ := json.Marshal(newResult.Data)
-						record.Result = fmt.Sprintf("原工具失败，使用替代方案 %s 成功：%s\n结果：%s",
-							newCall.Function.Name,
-							newResult.Message,
-							string(resultBytes))
-						record.Error = ""
-						resultStr = record.Result
-
-						// 记录恢复成功日志
-						a.errorRecovery.LogRecovery(RecoveryLog{
-							Timestamp:   time.Now(),
-							ToolName:    record.Tool,
-							Error:       record.Error,
-							Strategy:    "alternative_tool",
-							Success:     true,
-							Alternative: newCall.Function.Name,
-						})
-						break
-					} else {
-						// 替代工具也失败
-						logger.Warn("替代工具执行失败",
-							zap.String("tool", newCall.Function.Name),
-							zap.Error(newErr))
-					}
+					a.errorRecovery.LogRecovery(RecoveryLog{
+						Timestamp:   time.Now(),
+						ToolName:    record.Tool,
+						Error:       record.Error,
+						Strategy:    "alternative_tool",
+						Success:     true,
+						Alternative: altRecord.Tool,
+					})
+					break
 				}
 			}
-		} else {
-			// 工具执行成功
-			resultBytes, _ := json.Marshal(result.Data)
-			record.Result = string(resultBytes)
-			resultStr = fmt.Sprintf("执行成功: %s\n结果: %s", result.Message, string(resultBytes))
 		}
-
-		records = append(records, record)
-		toolMessages = append(toolMessages, llm.NewToolMessage(tc.ID, tc.Function.Name, resultStr))
 	}
 
 	return toolMessages, records
@@ -456,3 +401,19 @@ func (a *Agent) ChatWithReAct(ctx context.Context, req ChatRequest) (*ChatRespon
 	return a.reactAgent.ChatReAct(ctx, req)
 }
 
+
+
+// ClearCache 清空工具缓存
+func (a *Agent) ClearCache() {
+	if a.toolCache != nil {
+		a.toolCache.Clear()
+	}
+}
+
+// CacheStats 获取缓存统计
+func (a *Agent) CacheStats() (size int, hits int) {
+	if a.toolCache != nil {
+		return a.toolCache.Stats()
+	}
+	return 0, 0
+}

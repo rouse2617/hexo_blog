@@ -258,9 +258,10 @@ func (a *Agent) ChatWithThinking(ctx context.Context, req ChatRequest) (*ChatRes
 	thinkingSteps = append(thinkingSteps, analyzeStep)
 	logger.Info("分析用户请求", zap.String("thinking", analyzeStep.Content))
 
-	for i := 0; i < a.maxLoops; i++ {
-		_ = i // 避免未使用变量警告
-		logger.Debug("Agent 循环", zap.Int("loop", i+1))
+	loopCount := 0
+	for loopCount < a.maxLoops {
+		loopCount++
+		logger.Debug("Agent 循环", zap.Int("loop", loopCount))
 
 		// 第二步：规划行动（如果有工具调用历史）
 		if len(toolCallRecords) > 0 {
@@ -355,8 +356,9 @@ func (a *Agent) ChatStreamWithThinking(ctx context.Context, req ChatRequest, cal
 		Status:  "analyze",
 	})
 
-	for i := 0; i < a.maxLoops; i++ {
-		_ = i // 避免未使用变量警告
+	loopCount := 0
+	for loopCount < a.maxLoops {
+		loopCount++
 		var contentBuffer string
 		var toolCalls []llm.ToolCall
 		done := false
@@ -364,7 +366,7 @@ func (a *Agent) ChatStreamWithThinking(ctx context.Context, req ChatRequest, cal
 		// 通知前端：正在调用 LLM
 		callback(StreamChunk{
 			Type:    "thinking",
-			Step:    i + 1,
+			Step:    loopCount,
 			Status:  "calling_llm",
 			Content: "正在分析您的问题...",
 		})
@@ -402,7 +404,7 @@ func (a *Agent) ChatStreamWithThinking(ctx context.Context, req ChatRequest, cal
 			// 通知前端：准备执行工具
 			callback(StreamChunk{
 				Type:    "thinking",
-				Step:    i + 1,
+				Step:    loopCount,
 				Status:  "executing_tools",
 				Content: fmt.Sprintf("需要执行 %d 个工具来获取信息...", len(optimizedCalls)),
 			})
@@ -430,7 +432,7 @@ func (a *Agent) ChatStreamWithThinking(ctx context.Context, req ChatRequest, cal
 			// 通知前端：工具执行完成，继续分析
 			callback(StreamChunk{
 				Type:    "thinking",
-				Step:    i + 1,
+				Step:    loopCount,
 				Status:  "analyzing_results",
 				Content: "正在分析工具执行结果...",
 			})
