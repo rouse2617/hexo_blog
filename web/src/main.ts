@@ -9,6 +9,7 @@ import { useAppStore } from './stores/app'
 import { initNetworkMonitor, destroyNetworkMonitor } from './utils/networkMonitor'
 import { errorHandler, ErrorLevel } from './utils/errorHandler'
 import './styles/design-tokens.css'
+import './styles/theme.css'
 
 // 初始化网络监控
 initNetworkMonitor()

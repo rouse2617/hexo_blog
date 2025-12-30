@@ -6,7 +6,7 @@
       collapse-tags
       collapse-tags-tooltip
       placeholder="选择目标主机（可多选）"
-      style="width: 100%"
+      class="host-select"
       @change="handleChange"
     >
       <el-option
@@ -64,7 +64,18 @@ const handleChange = (val: string[]) => {
 
 <style scoped>
 .host-selector {
+  flex: 1;
+  min-width: 0;
+}
+
+.host-select {
   width: 100%;
+}
+
+.host-select :deep(.el-select__wrapper) {
+  border: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 .host-option {

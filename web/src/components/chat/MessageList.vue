@@ -1,9 +1,9 @@
 <template>
-  <div class="message-list-container">
+  <div class="message-list-container" role="log" aria-live="polite" aria-label="Chat messages">
     <!-- 空状态 - 显示智能推荐 -->
-    <div v-if="messages.length === 0" class="empty-state-with-suggestions">
+    <div v-if="messages.length === 0" class="empty-state-with-suggestions" role="status" aria-label="No messages">
       <div class="empty-state">
-        <el-icon :size="64" color="#c0c4cc"><ChatDotRound /></el-icon>
+        <el-icon :size="64" color="#c0c4cc" aria-hidden="true"><ChatDotRound /></el-icon>
         <p class="empty-title">开始新的对话</p>
         <p class="empty-desc">输入您的问题，AI 助手将为您提供帮助</p>
       </div>
@@ -32,79 +32,109 @@
         </el-button>
       </div>
 
-      <div class="message-scroller" ref="messageListRef" @scroll="handleScroll">
-        <div
-          v-for="(message, index) in visibleMessages"
-          :key="getMessageKey(message, index)"
-          class="message-item-wrapper"
-        >
-          <!-- 增强版消息组件 -->
-          <MessageItemEnhanced
-            :message="message"
-            :is-loading="isLoading && index === visibleMessages.length - 1"
-            :ref="el => setMessageRef(el, index)"
-            @copy="handleCopy"
-            @regenerate="handleRegenerate"
-            @continue="handleContinue"
-            @feedback="handleFeedback"
-            @export="handleExport"
-            @share="handleShare"
-            @toolRerun="handleToolRerun"
-            @followUp="handleFollowUp"
+      <div class="message-scroller" ref="messageListRef" @scroll="handleScroll" role="region" aria-label="Message list" tabindex="0">
+        <!-- 会话切换加载骨架屏 -->
+        <template v-if="sessionLoading">
+          <div v-for="i in 3" :key="i" class="message-skeleton" role="status" :aria-label="`Loading message ${i}`">
+            <div class="skeleton-avatar" aria-hidden="true"></div>
+            <div class="skeleton-content" aria-hidden="true">
+              <div class="skeleton-line skeleton-line-short"></div>
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line skeleton-line-medium"></div>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="(message, index) in visibleMessages"
+            :key="getMessageKey(message, index)"
+            class="message-item-wrapper"
+          >
+            <!-- 增强版消息组件 -->
+            <MessageItemEnhanced
+              :message="message"
+              :is-loading="isLoading && index === visibleMessages.length - 1"
+              :ref="el => setMessageRef(el, index)"
+              @copy="handleCopy"
+              @regenerate="handleRegenerate"
+              @continue="handleContinue"
+              @feedback="handleFeedback"
+              @export="handleExport"
+              @share="handleShare"
+              @tool-rerun="handleToolRerun"
+              @follow-up="handleFollowUp"
+            />
+          </div>
+
+          <!-- 思考过程展示（移到滚动区域内） -->
+          <ThinkingProcess
+            :thinking-steps="thinkingSteps"
+            :current-status="currentThinkingStatus"
+            :is-loading="isLoading"
+            @retry="handleThinkingRetry"
+            @file-click="handleThinkingFileClick"
           />
-        </div>
+        </template>
       </div>
     </template>
 
-    <!-- 思考过程展示 -->
-    <ThinkingProcess
-      :thinking-steps="thinkingSteps"
-      :current-status="currentThinkingStatus"
-      :is-loading="isLoading"
-    />
-
     <!-- 简单加载指示器（当没有思考步骤时显示） -->
-    <div v-if="isLoading && props.thinkingSteps.length === 0 && !currentThinkingStatus" class="loading-indicator">
-      <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+    <div v-if="isLoading && props.thinkingSteps.length === 0 && !currentThinkingStatus" class="loading-indicator" role="status" aria-live="polite" aria-label="AI is thinking">
+      <el-icon class="is-loading" :size="20" aria-hidden="true"><Loading /></el-icon>
       <span>AI 正在思考...</span>
     </div>
 
     <!-- 滚动到底部按钮 -->
     <transition name="fade">
-      <div v-if="showScrollButton" class="scroll-to-bottom" @click="scrollToBottom">
-        <el-icon><ArrowDown /></el-icon>
+      <div
+        v-if="showScrollButton"
+        class="scroll-to-bottom"
+        @click="scrollToBottom"
+        role="button"
+        tabindex="0"
+        aria-label="Scroll to bottom"
+        @keydown.enter="scrollToBottom"
+        @keydown.space.prevent="scrollToBottom"
+      >
+        <el-icon aria-hidden="true"><ArrowDown /></el-icon>
       </div>
     </transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { ref, watch, nextTick, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue'
 import type { Message } from '@/api/chat'
 import type { ThinkingStep } from '@/stores/chat'
 import type { ThinkingStatus } from '@/api/chat'
+import type { ThinkingFileReference } from '@/types/chat-ui'
 import { ChatDotRound, Loading, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import MessageItemEnhanced from './MessageItemEnhanced.vue'
-import ThinkingProcess from './ThinkingProcess.vue'
-import SmartSuggestions from './SmartSuggestions.vue'
-import QuickCommands from './QuickCommands.vue'
 import { useChatStore } from '@/stores/chat'
+
+// Lazy load heavy components for better performance
+const MessageItemEnhanced = defineAsyncComponent(() => import('./MessageItemEnhanced.vue'))
+const ThinkingProcess = defineAsyncComponent(() => import('./ThinkingProcess.vue'))
+const SmartSuggestions = defineAsyncComponent(() => import('./SmartSuggestions.vue'))
+const QuickCommands = defineAsyncComponent(() => import('./QuickCommands.vue'))
 
 const props = withDefaults(defineProps<{
   messages: Message[]
   isLoading: boolean
   thinkingSteps?: ThinkingStep[]
   currentThinkingStatus?: ThinkingStatus | null
+  sessionLoading?: boolean
 }>(), {
   thinkingSteps: () => [],
-  currentThinkingStatus: null
+  currentThinkingStatus: null,
+  sessionLoading: false
 })
 
 const emit = defineEmits<{
-  sendMessage: [content: string]
+  'send-message': [content: string]
   regenerate: [message: Message]
-  toolRerun: [toolCall: any]
+  'tool-rerun': [toolCall: any]
 }>()
 
 const chatStore = useChatStore()
@@ -162,12 +192,12 @@ const getContextFromMessages = () => {
 
 // 智能推荐选择处理
 const handleSuggestionSelect = (prompt: string) => {
-  emit('sendMessage', prompt)
+  emit('send-message', prompt)
 }
 
 // 快速命令选择处理
 const handleCommandSelect = (prompt: string) => {
-  emit('sendMessage', prompt)
+  emit('send-message', prompt)
 }
 
 // 消息操作处理函数
@@ -181,7 +211,7 @@ const handleRegenerate = (message: Message) => {
 }
 
 const handleContinue = (_message: Message, question: string) => {
-  emit('sendMessage', question)
+  emit('send-message', question)
 }
 
 const handleFeedback = (message: Message, type: 'good' | 'bad') => {
@@ -210,11 +240,31 @@ const handleShare = (message: Message) => {
 }
 
 const handleToolRerun = (toolCall: any) => {
-  emit('toolRerun', toolCall)
+  emit('tool-rerun', toolCall)
 }
 
 const handleFollowUp = (question: string) => {
-  emit('sendMessage', question)
+  emit('send-message', question)
+}
+
+// 思考过程重试处理
+const handleThinkingRetry = (stepIndex: number) => {
+  console.log('Retry thinking step:', stepIndex)
+  // TODO: Implement retry logic - this would typically re-trigger the AI processing
+  ElMessage.info('正在重试...')
+}
+
+// 思考过程文件点击处理
+const handleThinkingFileClick = (file: ThinkingFileReference) => {
+  console.log('File clicked:', file)
+  // TODO: Implement file preview modal
+  // For now, show a message with the file info
+  const lineInfo = file.lineNumber 
+    ? `:${file.lineNumber}` 
+    : file.lineRange 
+      ? `:${file.lineRange[0]}-${file.lineRange[1]}` 
+      : ''
+  ElMessage.info(`打开文件: ${file.path}${lineInfo}`)
 }
 
 // 加载更多历史消息
@@ -450,5 +500,64 @@ defineExpose({
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 会话切换骨架屏样式 */
+.message-skeleton {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  flex-shrink: 0;
+}
+
+.skeleton-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+.skeleton-line-short {
+  width: 30%;
+}
+
+.skeleton-line-medium {
+  width: 70%;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 </style>

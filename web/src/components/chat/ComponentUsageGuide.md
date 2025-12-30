@@ -18,6 +18,7 @@
 | QuickCommands | 快速命令模板 | `/web/src/components/chat/QuickCommands.vue` |
 | JsonViewer | JSON 数据查看器 | `/web/src/components/chat/JsonViewer.vue` |
 | TreeNode | 树形节点组件 | `/web/src/components/chat/TreeNode.vue` |
+| HistoryPanelOverlay | 移动端历史面板侧滑 | `/web/src/components/chat/HistoryPanelOverlay.vue` |
 
 ---
 
@@ -898,6 +899,169 @@ const handleFollowUp = (question: string) => {
 - [x] chat.ts - Store 状态和方法更新
 - [x] MessageList.vue - 集成所有新组件
 - [x] 组件使用指南文档
+- [x] HistoryPanelOverlay.vue - 移动端历史面板侧滑组件
+
+---
+
+### 10. HistoryPanelOverlay.vue - 移动端历史面板侧滑组件
+
+**功能特性**:
+- 侧滑抽屉效果 (Side drawer effect)
+- 点击遮罩层关闭 (Click mask to close)
+- 触摸滑动关闭 (Touch swipe to close)
+- 平滑的动画过渡
+- 支持手势拖拽反馈
+- 完整的 TypeScript 类型定义
+- 响应式设计，适配移动端和平板
+
+**Props 接口**:
+```typescript
+interface Props {
+  /** Whether the overlay is visible */
+  visible: boolean
+  /** List of chat sessions */
+  sessions: Array<{
+    id: string
+    title: string
+    createdAt: string | number
+  }>
+  /** Current active session ID */
+  currentSessionId: string
+}
+```
+
+**Events**:
+```typescript
+interface Emits {
+  /** Emitted when the overlay is closed */
+  (e: 'close'): void
+  /** Emitted when a session is selected */
+  (e: 'sessionSelect', sessionId: string): void
+  /** Emitted when a session is deleted */
+  (e: 'sessionDelete', sessionId: string): void
+}
+```
+
+**使用场景**:
+- 移动端 (single-column 布局) 显示历史会话列表
+- 通过菜单按钮打开侧滑面板
+- 支持手势滑动关闭，提升移动端体验
+
+**手势支持**:
+- **触摸开始**: 记录初始触摸位置
+- **触摸移动**: 检测水平滑动，应用视觉反馈
+- **触摸结束**: 判断滑动距离，超过阈值则关闭面板
+- **滑动阈值**: 50px (可配置)
+
+**动画效果**:
+- 遮罩层淡入淡出 (overlay-fade)
+- 面板从左侧滑入 (slide-left)
+- 使用 cubic-bezier 缓动函数，更自然的动画
+
+**响应式设计**:
+- 移动端: 宽度 280px，最大 85vw
+- 平板及以上: 宽度 320px
+- 支持自定义滚动条样式
+
+---
+
+### 使用示例
+
+在 ChatWindow.vue 中集成 HistoryPanelOverlay：
+
+```vue
+<template>
+  <div class="chat-window-container">
+    <!-- 现有的聊天面板 -->
+
+    <!-- 移动端历史面板侧滑 -->
+    <HistoryPanelOverlay
+      :visible="uiStore.historyPanelOverlayVisible"
+      :sessions="chatStore.sessions"
+      :current-session-id="chatStore.currentSessionId"
+      @close="handleCloseHistoryOverlay"
+      @session-select="handleSessionSelect"
+      @session-delete="handleDeleteSession"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useChatStore } from '@/stores/chat'
+import { useUIStore } from '@/stores/ui'
+import HistoryPanelOverlay from './HistoryPanelOverlay.vue'
+
+const chatStore = useChatStore()
+const uiStore = useUIStore()
+
+// 关闭历史面板
+const handleCloseHistoryOverlay = () => {
+  uiStore.closeHistoryOverlay()
+}
+
+// 选择会话
+const handleSessionSelect = async (sessionId: string) => {
+  if (sessionId === '__new__') {
+    await chatStore.newSession()
+  } else {
+    await chatStore.switchSession(sessionId)
+  }
+  uiStore.closeHistoryOverlay()
+}
+
+// 删除会话
+const handleDeleteSession = async (sessionId: string) => {
+  await chatStore.removeSession(sessionId)
+}
+</script>
+```
+
+**状态管理 (UI Store)**:
+
+```typescript
+// 在 ui.ts 中已有以下状态和方法
+interface UIState {
+  historyPanelOverlayVisible: boolean
+}
+
+function toggleHistoryOverlay(): void
+function closeHistoryOverlay(): void
+```
+
+**样式变量**:
+
+```css
+:root {
+  /* Z-index 层级 */
+  --z-modal-backdrop: 2000;
+  --z-modal: 2001;
+
+  /* 侧边栏样式 */
+  --sidebar-bg-start: #1e293b;
+  --sidebar-bg-end: #0f172a;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-text: #cbd5e1;
+  --sidebar-text-hover: #f1f5f9;
+  --sidebar-active-bg: rgba(59, 130, 246, 0.2);
+  --sidebar-active-text: #60a5fa;
+
+  /* 过渡动画 */
+  --transition-fast: 0.15s;
+  --transition-base: 0.3s;
+}
+```
+
+**无障碍支持**:
+- 支持减少动画偏好设置 (prefers-reduced-motion)
+- 适当的 ARIA 属性
+- 触摸反馈优化
+- 防止误触 (垂直滚动时不触发水平滑动)
+
+**性能优化**:
+- 使用 CSS transform 而非 position (GPU 加速)
+- 事件节流和防抖
+- 条件渲染 (v-if) 减少不必要的 DOM
+- 自定义滚动条优化
 
 ---
 

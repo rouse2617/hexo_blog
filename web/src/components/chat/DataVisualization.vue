@@ -33,7 +33,7 @@
           <!-- 进度条样式 -->
           <div class="memory-bars">
             <div
-              v-for="(item, index) in memoryData"
+              v-for="(item, index) in displayMemoryData"
               :key="index"
               class="memory-bar-wrapper"
             >
@@ -68,7 +68,7 @@
           </div>
           <div class="disk-pie-charts">
             <div
-              v-for="(disk, index) in diskData"
+              v-for="(disk, index) in displayDiskData"
               :key="index"
               class="disk-item"
             >
@@ -108,7 +108,7 @@
           </div>
           <div class="process-list">
             <div
-              v-for="(process, index) in processData"
+              v-for="(process, index) in displayProcessData"
               :key="process.pid"
               class="process-item"
             >
@@ -148,11 +148,11 @@
         <div class="chart-container">
           <div class="chart-header">
             <span class="chart-title">日志时间线</span>
-            <el-tag type="warning">{{ logData.length }} 条</el-tag>
+            <el-tag type="warning">{{ displayLogData.length }} 条</el-tag>
           </div>
           <div class="log-timeline">
             <div
-              v-for="(log, index) in logData"
+              v-for="(log, index) in displayLogData"
               :key="index"
               class="log-entry"
               :class="`log-${log.level.toLowerCase()}`"
@@ -263,27 +263,46 @@ const logData = ref<LogData[]>([
   { level: 'INFO', time: '10:24:18', message: 'Cron job completed successfully' }
 ])
 
-// 计算属性
+// 计算属性 - 优先使用 props 数据
 const currentCpu = computed(() => {
-  const data = props.data?.cpu || cpuData.value
-  return data[data.length - 1]?.value || 0
+  const data = props.data?.cpu
+  if (data && data.length > 0) {
+    return data[data.length - 1]?.value || 0
+  }
+  return cpuData.value[cpuData.value.length - 1]?.value || 0
 })
 
 const avgCpu = computed(() => {
-  const data = props.data?.cpu || cpuData.value
-  const sum = data.reduce((acc, item) => acc + item.value, 0)
-  return (sum / data.length).toFixed(1)
+  const data = props.data?.cpu
+  if (data && data.length > 0) {
+    const sum = data.reduce((acc, item) => acc + item.value, 0)
+    return (sum / data.length).toFixed(1)
+  }
+  const sum = cpuData.value.reduce((acc, item) => acc + item.value, 0)
+  return (sum / cpuData.value.length).toFixed(1)
 })
 
 const maxCpu = computed(() => {
-  const data = props.data?.cpu || cpuData.value
-  return Math.max(...data.map(item => item.value))
+  const data = props.data?.cpu
+  if (data && data.length > 0) {
+    return Math.max(...data.map(item => item.value))
+  }
+  return Math.max(...cpuData.value.map(item => item.value))
 })
 
 const currentMemory = computed(() => {
-  const data = props.data?.memory || memoryData.value
-  return data[data.length - 1]?.value || 0
+  const data = props.data?.memory
+  if (data && data.length > 0) {
+    return data[data.length - 1]?.value || 0
+  }
+  return memoryData.value[memoryData.value.length - 1]?.value || 0
 })
+
+// 实际使用的数据（优先 props）
+const displayMemoryData = computed(() => props.data?.memory || memoryData.value)
+const displayDiskData = computed(() => props.data?.disk || diskData.value)
+const displayProcessData = computed(() => props.data?.processes || processData.value)
+const displayLogData = computed(() => props.data?.logs || logData.value)
 
 const usedMemory = computed(() => {
   return (16 * currentMemory.value / 100).toFixed(1)

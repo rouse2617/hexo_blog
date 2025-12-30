@@ -9,6 +9,36 @@
             复制消息
           </el-dropdown-item>
 
+          <!-- 运维功能：复制命令 -->
+          <el-dropdown-item
+            v-if="hasCommands"
+            command="copyCommand"
+            :icon="DocumentCopy"
+          >
+            复制命令
+          </el-dropdown-item>
+
+          <!-- 运维功能：推荐执行 -->
+          <el-dropdown-item
+            v-if="hasCommands"
+            command="recommendExecute"
+            :icon="Promotion"
+          >
+            推荐执行
+          </el-dropdown-item>
+
+          <!-- 运维功能：保存为脚本 -->
+          <el-dropdown-item
+            v-if="hasCommands"
+            command="saveAsScript"
+            :icon="Download"
+          >
+            保存为脚本
+          </el-dropdown-item>
+
+          <!-- 分隔线 -->
+          <el-dropdown-item divided v-if="hasCommands" />
+
           <!-- 重新生成 -->
           <el-dropdown-item
             v-if="message.role === 'assistant'"
@@ -61,7 +91,7 @@
           <el-dropdown-item divided />
 
           <!-- 导出 -->
-          <el-dropdown-item command="export" :icon="Download">
+          <el-dropdown-item command="export" :icon="FolderOpened">
             导出为文件
           </el-dropdown-item>
 
@@ -82,6 +112,28 @@
           circle
           size="small"
           @click="handleCommand('copy')"
+        />
+      </el-tooltip>
+
+      <!-- 运维功能：复制命令 -->
+      <el-tooltip v-if="hasCommands" content="复制命令" placement="top">
+        <el-button
+          type="text"
+          :icon="DocumentCopy"
+          circle
+          size="small"
+          @click="handleCommand('copyCommand')"
+        />
+      </el-tooltip>
+
+      <!-- 运维功能：推荐执行 -->
+      <el-tooltip v-if="hasCommands" content="推荐执行" placement="top">
+        <el-button
+          type="text"
+          :icon="Promotion"
+          circle
+          size="small"
+          @click="handleCommand('recommendExecute')"
         />
       </el-tooltip>
 
@@ -122,12 +174,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { Message } from '@/api/chat'
 import {
-  MoreFilled, CopyDocument, RefreshRight, ChatLineRound,
-  Select, CloseBold, Download, Share
+  MoreFilled, CopyDocument, DocumentCopy, Promotion, RefreshRight,
+  ChatLineRound, Select, CloseBold, Download, FolderOpened, Share
 } from '@element-plus/icons-vue'
 
 const props = defineProps<{
@@ -137,6 +189,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   copy: [message: Message]
+  copyCommand: [message: Message]
+  recommendExecute: [message: Message]
+  saveAsScript: [message: Message]
   regenerate: [message: Message]
   continue: [message: Message]
   feedback: [message: Message, type: 'good' | 'bad']
@@ -147,11 +202,72 @@ const emit = defineEmits<{
 const feedback = ref<'good' | 'bad' | null>(null)
 const isVisible = ref(false)
 
+// Extract commands from message content using regex
+const hasCommands = computed(() => {
+  const content = props.message.content || ''
+  // Match common command patterns (shell code blocks or inline commands)
+  const commandPatterns = [
+    /```(?:bash|shell|sh)\n([\s\S]*?)```/gi,
+    /`([^`\n]+)`/g,
+    /^\s*(sudo|kubectl|docker|git|npm|yum|apt|systemctl|ssh|curl|wget)\s+/gim
+  ]
+
+  for (const pattern of commandPatterns) {
+    if (pattern.test(content)) {
+      return true
+    }
+  }
+  return false
+})
+
+// Extract all commands from the message
+const extractCommands = (): string[] => {
+  const content = props.message.content || ''
+  const commands: string[] = []
+
+  // Extract from code blocks
+  const codeBlockRegex = /```(?:bash|shell|sh)\n([\s\S]*?)```/gi
+  let match
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    const blockCommands = match[1]
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith('#'))
+    commands.push(...blockCommands)
+  }
+
+  // Extract inline commands
+  const inlineCommandRegex = /`([^`\n]+)`/g
+  while ((match = inlineCommandRegex.exec(content)) !== null) {
+    const cmd = match[1].trim()
+    if (/^(sudo|kubectl|docker|git|npm|yum|apt|systemctl|ssh|curl|wget)\s+/.test(cmd)) {
+      commands.push(cmd)
+    }
+  }
+
+  return commands
+}
+
 const handleCommand = async (command: string) => {
   switch (command) {
     case 'copy':
       await copyMessage()
       emit('copy', props.message)
+      break
+
+    case 'copyCommand':
+      await copyCommands()
+      emit('copyCommand', props.message)
+      break
+
+    case 'recommendExecute':
+      recommendExecuteCommands()
+      emit('recommendExecute', props.message)
+      break
+
+    case 'saveAsScript':
+      saveAsScript()
+      emit('saveAsScript', props.message)
       break
 
     case 'regenerate':
@@ -197,6 +313,62 @@ const copyMessage = async () => {
   } catch {
     ElMessage.error('复制失败')
   }
+}
+
+const copyCommands = async () => {
+  const commands = extractCommands()
+  if (commands.length === 0) {
+    ElMessage.warning('未找到可执行的命令')
+    return
+  }
+
+  const commandText = commands.join('\n')
+  try {
+    await navigator.clipboard.writeText(commandText)
+    ElMessage.success(`已复制 ${commands.length} 条命令到剪贴板`)
+  } catch {
+    ElMessage.error('复制失败')
+  }
+}
+
+const recommendExecuteCommands = () => {
+  const commands = extractCommands()
+  if (commands.length === 0) {
+    ElMessage.warning('未找到可执行的命令')
+    return
+  }
+
+  ElMessage.success(`已推荐 ${commands.length} 条命令到执行队列`)
+}
+
+const saveAsScript = () => {
+  const commands = extractCommands()
+  if (commands.length === 0) {
+    ElMessage.warning('未找到可执行的命令')
+    return
+  }
+
+  // Add shebang and proper formatting
+  const scriptContent = `#!/bin/bash
+# Auto-generated script from AI conversation
+# Generated at: ${new Date().toISOString()}
+
+set -e  # Exit on error
+
+${commands.join('\n')}
+`
+
+  const blob = new Blob([scriptContent], { type: 'text/x-shellscript' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ai_script_${Date.now()}.sh`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  ElMessage.success('脚本已保存')
 }
 
 const exportMessage = () => {

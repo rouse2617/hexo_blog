@@ -1,0 +1,371 @@
+/**
+ * Theme System - Dark Mode Support
+ * 
+ * This file extends the design tokens with dark mode support.
+ * Uses CSS custom properties and data-theme attribute for theme switching.
+ * 
+ * @requirements 13.1, 13.2, 13.3, 13.4
+ */
+
+/* ================================================== */
+/* Light Theme (Default)                               */
+/* ================================================== */
+
+:root,
+[data-theme="light"] {
+  /* Background Colors */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f8fafc;
+  --color-bg-tertiary: #f1f5f9;
+  --color-bg-elevated: #ffffff;
+  
+  /* Surface Colors */
+  --color-surface: #ffffff;
+  --color-surface-hover: #f8fafc;
+  --color-surface-active: #f1f5f9;
+  
+  /* Text Colors */
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-tertiary: #94a3b8;
+  --color-text-disabled: #cbd5e1;
+  --color-text-inverse: #ffffff;
+  
+  /* Border Colors */
+  --color-border: #e2e8f0;
+  --color-border-light: #f1f5f9;
+  --color-border-dark: #cbd5e1;
+  
+  /* Chat UI Specific */
+  --color-message-user-bg: #ecf5ff;
+  --color-message-user-text: #1e293b;
+  --color-message-assistant-bg: #ffffff;
+  --color-message-assistant-text: #1e293b;
+  --color-message-system-bg: #fef3c7;
+  --color-message-system-text: #92400e;
+  
+  /* Tool Call Card */
+  --color-tool-card-bg: #f8fafc;
+  --color-tool-card-border: #e2e8f0;
+  --color-tool-card-header: #f1f5f9;
+  
+  /* Code Block */
+  --color-code-bg: #1e293b;
+  --color-code-text: #e2e8f0;
+  --color-code-border: #334155;
+  
+  /* Input */
+  --color-input-bg: #ffffff;
+  --color-input-border: #e2e8f0;
+  --color-input-focus-border: #409eff;
+  --color-input-placeholder: #94a3b8;
+  
+  /* Panel */
+  --color-panel-bg: #ffffff;
+  --color-panel-header-bg: #f8fafc;
+  --color-panel-border: #e2e8f0;
+  
+  /* Diff View */
+  --color-diff-added-bg: #dcfce7;
+  --color-diff-added-text: #166534;
+  --color-diff-removed-bg: #fee2e2;
+  --color-diff-removed-text: #991b1b;
+  --color-diff-unchanged-bg: transparent;
+  --color-diff-line-number: #64748b;
+  
+  /* Status Colors */
+  --color-status-online: #22c55e;
+  --color-status-offline: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-connecting: #eab308;
+  
+  /* Risk Level Colors */
+  --color-risk-low: #22c55e;
+  --color-risk-medium: #f59e0b;
+  --color-risk-high: #ef4444;
+  --color-risk-critical: #dc2626;
+  
+  /* Shadows */
+  --shadow-panel: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-dropdown: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* ================================================== */
+/* Dark Theme                                          */
+/* ================================================== */
+
+[data-theme="dark"] {
+  /* Background Colors - Using #1a1a1a as per Req 13.2 */
+  --color-bg-primary: #1a1a1a;
+  --color-bg-secondary: #242424;
+  --color-bg-tertiary: #2d2d2d;
+  --color-bg-elevated: #2d2d2d;
+  
+  /* Surface Colors */
+  --color-surface: #2d2d2d;
+  --color-surface-hover: #363636;
+  --color-surface-active: #404040;
+  
+  /* Text Colors - WCAG AA compliant contrast */
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-tertiary: #64748b;
+  --color-text-disabled: #475569;
+  --color-text-inverse: #1e293b;
+  
+  /* Border Colors */
+  --color-border: #404040;
+  --color-border-light: #363636;
+  --color-border-dark: #525252;
+  
+  /* Chat UI Specific */
+  --color-message-user-bg: #1e3a5f;
+  --color-message-user-text: #e2e8f0;
+  --color-message-assistant-bg: #2d2d2d;
+  --color-message-assistant-text: #e2e8f0;
+  --color-message-system-bg: #422006;
+  --color-message-system-text: #fef3c7;
+  
+  /* Tool Call Card */
+  --color-tool-card-bg: #242424;
+  --color-tool-card-border: #404040;
+  --color-tool-card-header: #2d2d2d;
+  
+  /* Code Block - Dark theme optimized (Req 13.4) */
+  --color-code-bg: #0d1117;
+  --color-code-text: #c9d1d9;
+  --color-code-border: #30363d;
+  
+  /* Input */
+  --color-input-bg: #2d2d2d;
+  --color-input-border: #404040;
+  --color-input-focus-border: #409eff;
+  --color-input-placeholder: #64748b;
+  
+  /* Panel */
+  --color-panel-bg: #242424;
+  --color-panel-header-bg: #2d2d2d;
+  --color-panel-border: #404040;
+  
+  /* Diff View */
+  --color-diff-added-bg: #132f21;
+  --color-diff-added-text: #7ee787;
+  --color-diff-removed-bg: #3d1f1f;
+  --color-diff-removed-text: #f97583;
+  --color-diff-unchanged-bg: transparent;
+  --color-diff-line-number: #64748b;
+  
+  /* Status Colors */
+  --color-status-online: #22c55e;
+  --color-status-offline: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-connecting: #eab308;
+  
+  /* Risk Level Colors */
+  --color-risk-low: #22c55e;
+  --color-risk-medium: #f59e0b;
+  --color-risk-high: #ef4444;
+  --color-risk-critical: #dc2626;
+  
+  /* Shadows - Adjusted for dark mode */
+  --shadow-panel: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-dropdown: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+  
+  /* Override neutral colors for dark mode */
+  --color-gray-50: #171717;
+  --color-gray-100: #262626;
+  --color-gray-200: #404040;
+  --color-gray-300: #525252;
+  --color-gray-400: #737373;
+  --color-gray-500: #a3a3a3;
+  --color-gray-600: #d4d4d4;
+  --color-gray-700: #e5e5e5;
+  --color-gray-800: #f5f5f5;
+  --color-gray-900: #fafafa;
+  
+  /* Sidebar Colors for dark mode */
+  --sidebar-bg-start: #1a1a1a;
+  --sidebar-bg-end: #141414;
+  --sidebar-border: #2d2d2d;
+  --sidebar-text: #94a3b8;
+  --sidebar-text-hover: #e2e8f0;
+  --sidebar-active-bg: rgba(59, 130, 246, 0.2);
+  --sidebar-active-text: #60a5fa;
+}
+
+/* ================================================== */
+/* Dark Mode Body Styles                               */
+/* ================================================== */
+
+[data-theme="dark"] body {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+/* Scrollbar for dark mode */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-dark);
+}
+
+/* Selection for dark mode */
+[data-theme="dark"] ::selection {
+  background: rgba(64, 158, 255, 0.3);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] ::-moz-selection {
+  background: rgba(64, 158, 255, 0.3);
+  color: var(--color-text-primary);
+}
+
+/* ================================================== */
+/* Utility Classes                                     */
+/* ================================================== */
+
+/* Theme transition for smooth switching */
+.theme-transition,
+.theme-transition * {
+  transition: background-color 0.2s ease, 
+              border-color 0.2s ease, 
+              color 0.2s ease,
+              box-shadow 0.2s ease !important;
+}
+
+/* Disable transitions during theme change to prevent flash */
+.theme-changing,
+.theme-changing * {
+  transition: none !important;
+}
+
+/* ================================================== */
+/* Element Plus Dark Mode Overrides                    */
+/* ================================================== */
+
+[data-theme="dark"] {
+  /* Element Plus variables */
+  --el-bg-color: var(--color-bg-primary);
+  --el-bg-color-page: var(--color-bg-secondary);
+  --el-bg-color-overlay: var(--color-surface);
+  --el-text-color-primary: var(--color-text-primary);
+  --el-text-color-regular: var(--color-text-secondary);
+  --el-text-color-secondary: var(--color-text-tertiary);
+  --el-text-color-placeholder: var(--color-input-placeholder);
+  --el-border-color: var(--color-border);
+  --el-border-color-light: var(--color-border-light);
+  --el-border-color-lighter: var(--color-border-light);
+  --el-border-color-dark: var(--color-border-dark);
+  --el-fill-color: var(--color-surface);
+  --el-fill-color-light: var(--color-surface-hover);
+  --el-fill-color-lighter: var(--color-surface-active);
+  --el-fill-color-blank: var(--color-bg-primary);
+  
+  /* Input */
+  --el-input-bg-color: var(--color-input-bg);
+  --el-input-border-color: var(--color-input-border);
+  --el-input-text-color: var(--color-text-primary);
+  
+  /* Button */
+  --el-button-bg-color: var(--color-surface);
+  --el-button-border-color: var(--color-border);
+  --el-button-text-color: var(--color-text-primary);
+  --el-button-hover-bg-color: var(--color-surface-hover);
+  --el-button-hover-border-color: var(--color-border-dark);
+  
+  /* Card */
+  --el-card-bg-color: var(--color-surface);
+  --el-card-border-color: var(--color-border);
+  
+  /* Dialog */
+  --el-dialog-bg-color: var(--color-surface);
+  --el-dialog-border-color: var(--color-border);
+  
+  /* Dropdown */
+  --el-dropdown-menu-bg-color: var(--color-surface);
+  --el-dropdown-menu-border-color: var(--color-border);
+  
+  /* Table */
+  --el-table-bg-color: var(--color-bg-primary);
+  --el-table-tr-bg-color: var(--color-bg-primary);
+  --el-table-header-bg-color: var(--color-bg-secondary);
+  --el-table-row-hover-bg-color: var(--color-surface-hover);
+  --el-table-border-color: var(--color-border);
+  
+  /* Menu */
+  --el-menu-bg-color: var(--color-bg-primary);
+  --el-menu-text-color: var(--color-text-secondary);
+  --el-menu-hover-bg-color: var(--color-surface-hover);
+  --el-menu-active-color: var(--color-primary);
+  
+  /* Notification */
+  --el-notification-bg-color: var(--color-surface);
+  --el-notification-border-color: var(--color-border);
+  
+  /* Message */
+  --el-message-bg-color: var(--color-surface);
+  --el-message-border-color: var(--color-border);
+  
+  /* Tooltip */
+  --el-tooltip-bg-color: var(--color-surface);
+  --el-tooltip-border-color: var(--color-border);
+  --el-tooltip-text-color: var(--color-text-primary);
+  
+  /* Popover */
+  --el-popover-bg-color: var(--color-surface);
+  --el-popover-border-color: var(--color-border);
+  
+  /* Tag */
+  --el-tag-bg-color: var(--color-surface);
+  --el-tag-border-color: var(--color-border);
+  --el-tag-text-color: var(--color-text-primary);
+}
+
+/* ================================================== */
+/* Highlight.js Dark Theme Override                    */
+/* ================================================== */
+
+[data-theme="dark"] .hljs {
+  background: var(--color-code-bg) !important;
+  color: var(--color-code-text) !important;
+}
+
+/* ================================================== */
+/* Animation Keyframes                                 */
+/* ================================================== */
+
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-warning {
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}

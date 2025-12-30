@@ -119,6 +119,9 @@ export const useChatStore = defineStore('chat', () => {
   const suggestions = ref<Suggestion[]>([])
   const showSuggestions = ref(true)
 
+  // 会话切换加载状态
+  const sessionLoading = ref(false)
+
   // 请求取消控制器
   let abortController: AbortController | null = null
 
@@ -167,6 +170,8 @@ export const useChatStore = defineStore('chat', () => {
   async function switchSession(sessionId: string) {
     // 设置切换锁
     isSwitchingSession = true
+    // 设置加载状态
+    sessionLoading.value = true
 
     // 取消正在进行的请求
     cancelCurrentRequest()
@@ -177,6 +182,8 @@ export const useChatStore = defineStore('chat', () => {
     try {
       await loadHistory(sessionId)
     } finally {
+      // 关闭加载状态
+      sessionLoading.value = false
       // 等待下一个 tick 后释放锁，确保状态已更新
       setTimeout(() => {
         isSwitchingSession = false
@@ -530,6 +537,7 @@ export const useChatStore = defineStore('chat', () => {
     currentThinkingStatus,
     suggestions,
     showSuggestions,
+    sessionLoading,
     loadSessions,
     newSession,
     switchSession,
