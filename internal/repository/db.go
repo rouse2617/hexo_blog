@@ -4,6 +4,7 @@ import (
 	"ai-ops/internal/model"
 	"ai-ops/pkg/logger"
 	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
@@ -14,7 +15,7 @@ import (
 func InitDB(dsn string) (*gorm.DB, error) {
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("打开数据库失败: %w", err)
 	}
 
 	// 获取底层 SQL DB 连接以执行 PRAGMA 命令
@@ -22,6 +23,12 @@ func InitDB(dsn string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("获取数据库连接失败: %w", err)
 	}
+
+	// 配置连接池
+	sqlDB.SetMaxOpenConns(25) // 最大打开连接数
+	sqlDB.SetMaxIdleConns(5)  // 最大空闲连接数
+	sqlDB.SetConnMaxLifetime(5 * time.Minute) // 连接最大存活时间
+	sqlDB.SetConnMaxIdleTime(1 * time.Minute) // 空闲连接最大存活时间
 
 	// 配置 SQLite 性能优化参数
 	pragmaStatements := []string{

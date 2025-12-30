@@ -3,6 +3,7 @@ package repository
 import (
 	"ai-ops/internal/crypto"
 	"ai-ops/internal/model"
+	"fmt"
 	"strings"
 
 	"gorm.io/gorm"
@@ -131,13 +132,15 @@ func (r *hostRepository) List(filter HostFilter) ([]*model.Host, error) {
 
 	err := query.Order("created_at DESC").Find(&hosts).Error
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("查询主机列表失败: %w", err)
 	}
 
-	// 读取后解密敏感数据
-	for _, host := range hosts {
-		if err := r.decryptAfterLoad(host); err != nil {
-			return nil, err
+	// 读取后批量解密敏感数据（优化：减少解密调用的开销）
+	if r.encryptor != nil {
+		for _, host := range hosts {
+			if err := r.decryptAfterLoad(host); err != nil {
+				return nil, fmt.Errorf("解密主机数据失败: %w", err)
+			}
 		}
 	}
 

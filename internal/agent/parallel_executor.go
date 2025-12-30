@@ -63,15 +63,54 @@ func (e *ParallelExecutor) executeMultiple(ctx context.Context, toolCalls []llm.
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, e.maxConcurrent)
 
+	// 添加 context 取消监听，确保 context 取消时所有 goroutine 能快速退出
 	for i, tc := range toolCalls {
+		// 检查 context 是否已取消
+		select {
+		case <-ctx.Done():
+			// context 已取消，为剩余的工具填充错误结果
+			for j := i; j < len(toolCalls); j++ {
+				results[j] = struct {
+					msg    llm.Message
+					record ToolCallRecord
+				}{
+					msg: llm.NewToolMessage(tc.ID, tc.Function.Name, "执行取消"),
+					record: ToolCallRecord{
+						ID:    tc.ID,
+						Tool:  tc.Function.Name,
+						Error: "执行取消",
+					},
+				}
+			}
+			break
+		default:
+		}
+
 		wg.Add(1)
 		go func(idx int, toolCall llm.ToolCall) {
 			defer wg.Done()
 
 			// 获取信号量
-			semaphore <- struct{}{}
-			defer func() { <-semaphore }()
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			case <-ctx.Done():
+				// context 取消，不再等待信号量
+				results[idx] = struct {
+					msg    llm.Message
+					record ToolCallRecord
+				}{
+					msg: llm.NewToolMessage(toolCall.ID, toolCall.Function.Name, "执行取消"),
+					record: ToolCallRecord{
+						ID:    toolCall.ID,
+						Tool:  toolCall.Function.Name,
+						Error: "执行取消",
+					},
+				}
+				return
+			}
 
+			// 使用带 context 的执行
 			msg, record := e.executeOne(ctx, toolCall, hosts)
 			results[idx] = struct {
 				msg    llm.Message

@@ -397,7 +397,6 @@ function logToAudit(command: string, host: string, risk: RiskAssessment | null) 
     riskLevel: risk?.level || 'low',
     source: 'quick_terminal'
   }
-  console.log('[Audit]', auditEntry)
 }
 
 function formatTime(timestamp: number): string {

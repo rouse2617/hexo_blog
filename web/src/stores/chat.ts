@@ -15,7 +15,7 @@ export interface Suggestion {
   title: string
   description: string
   prompt: string
-  icon: any
+  icon: unknown
   category: 'monitor' | 'log' | 'analysis' | 'command' | 'troubleshoot'
 }
 
@@ -203,7 +203,6 @@ export const useChatStore = defineStore('chat', () => {
       // 尝试从缓存加载
       const cached = loadMessageCache(sessionId)
       if (cached) {
-        console.log('[ChatStore] Loaded messages from cache')
         messages.value = cached
       } else {
         messages.value = []
@@ -232,19 +231,15 @@ export const useChatStore = defineStore('chat', () => {
 
   // 发送消息（流式）
   async function sendMessage(content: string) {
-    console.log('[sendMessage] Called with:', content)
     if (!content.trim() || isLoading.value) {
-      console.log('[sendMessage] Skipped - empty or loading', { empty: !content.trim(), loading: isLoading.value })
       return
     }
 
     // 检查是否正在切换会话
     if (isSwitchingSession) {
-      console.log('[sendMessage] Skipped - session is switching')
       return
     }
 
-    console.log('[sendMessage] Processing message')
 
     // 取消之前的请求
     cancelCurrentRequest()
@@ -285,14 +280,12 @@ export const useChatStore = defineStore('chat', () => {
           sessionId: currentSessionId.value,
           hostIds: selectedHostIds.value
         },
-        (chunk: string, type: StreamEventType, rawData?: any) => {
-          console.log('[SSE Event]', type, rawData) // 调试日志
+        (chunk: string, type: StreamEventType, rawData?: unknown) => {
           const lastMessage = messages.value[messages.value.length - 1]
           if (lastMessage.role !== 'assistant') return
 
           switch (type) {
             case 'thinking':
-              console.log('[Thinking]', rawData) // 调试日志
               // 更新思考状态
               currentThinkingStatus.value = {
                 step: rawData.step,
@@ -316,7 +309,6 @@ export const useChatStore = defineStore('chat', () => {
                 existingStep.status = rawData.status
                 existingStep.content = rawData.content
               }
-              console.log('[ThinkingSteps]', thinkingSteps.value) // 调试日志
               break
 
             case 'content':
@@ -406,10 +398,9 @@ export const useChatStore = defineStore('chat', () => {
         },
         abortController.signal
       )
-    } catch (error: any) {
+    } catch (error: unknown) {
       // 忽略取消错误
       if (error.name === 'AbortError') {
-        console.log('[sendMessage] Request was cancelled')
         // 显示取消通知
         ElNotification({
           title: '请求已取消',

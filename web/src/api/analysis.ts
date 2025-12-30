@@ -1,7 +1,7 @@
 import { request } from './request'
 
 export interface AnalyzeRequest {
-  results: any[]
+  results: unknown[]
   question?: string
 }
 
@@ -21,29 +21,27 @@ export interface Analysis {
   created_at: string
 }
 
-// AI分析批量执行结果
-export function analyzeResults(data: AnalyzeRequest) {
+export interface AnalysisHistoryParams {
+  session_id?: string
+  limit?: number
+}
+
+// ============================================================================
+// Analysis API Functions
+// ============================================================================
+
+export function analyzeResults(data: AnalyzeRequest): Promise<AnalyzeResponse> {
   return request.post<AnalyzeResponse>('/analysis/analyze', data)
 }
 
-// 获取分析历史
-export function getAnalysisHistory(params?: { session_id?: string; limit?: number }) {
+export function getAnalysisHistory(params?: AnalysisHistoryParams): Promise<Analysis[]> {
   return request.get<Analysis[]>('/analysis/history', { params })
 }
 
-// 获取单个分析记录
-export function getAnalysis(id: string) {
+export function getAnalysis(id: string): Promise<Analysis> {
   return request.get<Analysis>(`/analysis/${id}`)
 }
 
-// 删除分析记录
-export function deleteAnalysis(id: string) {
+export function deleteAnalysis(id: string): Promise<void> {
   return request.delete(`/analysis/${id}`)
 }
-
-
-
-
-
-
-

@@ -48,7 +48,7 @@ function getValueByPath(obj: any, path: string): any {
 /**
  * 根据路径设置对象中的值
  */
-function setValueByPath(obj: any, path: string, value: any): void {
+function setValueByPath(obj: any, path: string, value: unknown): void {
   const parts = path.split('.')
   const lastPart = parts.pop()!
   const target = parts.reduce((acc, part) => {

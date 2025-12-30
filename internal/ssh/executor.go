@@ -458,7 +458,12 @@ func (p *Pool) isAlive(conn *ssh.Client) bool {
 	if err != nil {
 		return false
 	}
-	session.Close()
+	// 确保关闭会话
+	defer func() {
+		if session != nil {
+			session.Close()
+		}
+	}()
 	return true
 }
 
@@ -592,10 +597,14 @@ func (p *Pool) ExecWithTimeout(host string, cmd string, timeout time.Duration) (
 
 // BatchExec 批量并发执行
 func (p *Pool) BatchExec(hosts []string, cmd string) []ExecResult {
+	if len(hosts) == 0 {
+		return nil
+	}
+
 	results := make([]ExecResult, len(hosts))
 	var wg sync.WaitGroup
 
-	// 控制并发数
+	// 控制并发数 - 使用缓冲 channel 作为信号量
 	semaphore := make(chan struct{}, p.config.MaxConcurrent)
 
 	for i, host := range hosts {
@@ -603,8 +612,15 @@ func (p *Pool) BatchExec(hosts []string, cmd string) []ExecResult {
 		go func(idx int, h string) {
 			defer wg.Done()
 
-			semaphore <- struct{}{}        // 获取信号量
-			defer func() { <-semaphore }() // 释放信号量
+			// 获取信号量，支持 context 取消
+			select {
+			case semaphore <- struct{}{}:
+				defer func() { <-semaphore }()
+			default:
+				// 如果无法获取信号量，等待
+				semaphore <- struct{}{}
+				defer func() { <-semaphore }()
+			}
 
 			start := time.Now()
 			output, err := p.Exec(h, cmd)
@@ -628,10 +644,16 @@ func (p *Pool) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// 关闭所有 SSH 连接
 	for name, conn := range p.connections {
-		conn.Close()
+		if conn != nil {
+			conn.Close()
+		}
 		delete(p.connections, name)
 	}
+
+	// 清空主机信息
+	p.hosts = make(map[string]HostInfo)
 }
 
 // ConnectionCount 获取当前连接数

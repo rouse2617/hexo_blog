@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,9 +11,11 @@ import (
 
 // ToolCache 工具调用缓存
 type ToolCache struct {
-	cache map[string]*CacheEntry
-	mu    sync.RWMutex
-	ttl   time.Duration
+	cache   map[string]*CacheEntry
+	mu      sync.RWMutex
+	ttl     time.Duration
+	cancel  context.CancelFunc // 用于关闭 cleanup goroutine
+	stopped sync.Once         // 确保 Close 只执行一次
 }
 
 // CacheEntry 缓存条目
@@ -28,12 +31,16 @@ func NewToolCache(ttl time.Duration) *ToolCache {
 	if ttl == 0 {
 		ttl = 30 * time.Second // 默认 30 秒过期
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
 	tc := &ToolCache{
-		cache: make(map[string]*CacheEntry),
-		ttl:   ttl,
+		cache:  make(map[string]*CacheEntry),
+		ttl:    ttl,
+		cancel: cancel,
 	}
 	// 启动清理协程
-	go tc.cleanupLoop()
+	go tc.cleanupLoop(ctx)
 	return tc
 }
 
@@ -95,12 +102,18 @@ func (c *ToolCache) makeKey(toolName string, params map[string]interface{}) stri
 }
 
 // cleanupLoop 定期清理过期缓存
-func (c *ToolCache) cleanupLoop() {
+func (c *ToolCache) cleanupLoop(ctx context.Context) {
 	ticker := time.NewTicker(c.ttl)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.cleanup()
+	for {
+		select {
+		case <-ticker.C:
+			c.cleanup()
+		case <-ctx.Done():
+			// context 取消，退出清理循环
+			return
+		}
 	}
 }
 
@@ -134,6 +147,14 @@ func (c *ToolCache) Stats() (size int, totalHits int) {
 		totalHits += entry.HitCount
 	}
 	return
+}
+
+// Close 关闭缓存，停止清理 goroutine
+func (c *ToolCache) Close() {
+	c.stopped.Do(func() {
+		c.cancel()
+		c.Clear()
+	})
 }
 
 // isReadOnlyTool 判断是否为只读工具（可缓存）

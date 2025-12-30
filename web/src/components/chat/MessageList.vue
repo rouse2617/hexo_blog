@@ -216,7 +216,6 @@ const handleContinue = (_message: Message, question: string) => {
 
 const handleFeedback = (message: Message, type: 'good' | 'bad') => {
   // TODO: 实现反馈提交
-  console.log('Feedback:', type, message)
   ElMessage.success(type === 'good' ? '感谢您的反馈！' : '感谢您的反馈，我们会改进！')
 }
 
@@ -249,14 +248,12 @@ const handleFollowUp = (question: string) => {
 
 // 思考过程重试处理
 const handleThinkingRetry = (stepIndex: number) => {
-  console.log('Retry thinking step:', stepIndex)
   // TODO: Implement retry logic - this would typically re-trigger the AI processing
   ElMessage.info('正在重试...')
 }
 
 // 思考过程文件点击处理
 const handleThinkingFileClick = (file: ThinkingFileReference) => {
-  console.log('File clicked:', file)
   // TODO: Implement file preview modal
   // For now, show a message with the file info
   const lineInfo = file.lineNumber 

@@ -134,18 +134,7 @@ func (a *Agent) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error
 	messages := a.buildMessagesWithPrompt(req, systemPrompt)
 
 	// 获取工具定义
-	tools := a.toolRegistry.GenerateJSONSchema()
-	toolDefs := make([]llm.ToolDef, len(tools))
-	for i, t := range tools {
-		toolDefs[i] = llm.ToolDef{
-			Type: "function",
-			Function: llm.FunctionDef{
-				Name:        t["function"].(map[string]interface{})["name"].(string),
-				Description: t["function"].(map[string]interface{})["description"].(string),
-				Parameters:  t["function"].(map[string]interface{})["parameters"].(map[string]interface{}),
-			},
-		}
-	}
+	toolDefs := a.buildToolDefinitions()
 
 	// Agent 循环
 	var toolCallRecords []ToolCallRecord
@@ -208,6 +197,54 @@ func (a *Agent) buildMessages(req ChatRequest) []llm.Message {
 	messages = append(messages, llm.NewUserMessage(req.Message))
 
 	return messages
+}
+
+// buildMessagesWithPrompt 使用指定的 system prompt 构建消息列表
+func (a *Agent) buildMessagesWithPrompt(req ChatRequest, systemPrompt string) []llm.Message {
+	messages := make([]llm.Message, 0, len(req.History)+2)
+
+	// 系统提示词
+	messages = append(messages, llm.NewSystemMessage(systemPrompt))
+
+	// 历史消息
+	messages = append(messages, req.History...)
+
+	// 用户消息
+	messages = append(messages, llm.NewUserMessage(req.Message))
+
+	return messages
+}
+
+// buildToolDefinitions 构建 LLM 工具定义
+func (a *Agent) buildToolDefinitions() []llm.ToolDef {
+	tools := a.toolRegistry.GenerateJSONSchema()
+	toolDefs := make([]llm.ToolDef, 0, len(tools))
+
+	for _, t := range tools {
+		function, ok := t["function"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, nameOk := function["name"].(string)
+		description, descOk := function["description"].(string)
+		parameters, paramsOk := function["parameters"].(map[string]interface{})
+
+		if !nameOk || !descOk || !paramsOk {
+			continue
+		}
+
+		toolDefs = append(toolDefs, llm.ToolDef{
+			Type: "function",
+			Function: llm.FunctionDef{
+				Name:        name,
+				Description: description,
+				Parameters:  parameters,
+			},
+		})
+	}
+
+	return toolDefs
 }
 
 // executeToolCalls 执行工具调用（带错误恢复和并行执行）
@@ -278,18 +315,7 @@ func (a *Agent) ChatStream(ctx context.Context, req ChatRequest, callback func(c
 	messages := a.buildMessagesWithPrompt(req, systemPrompt)
 
 	// 获取工具定义
-	tools := a.toolRegistry.GenerateJSONSchema()
-	toolDefs := make([]llm.ToolDef, len(tools))
-	for i, t := range tools {
-		toolDefs[i] = llm.ToolDef{
-			Type: "function",
-			Function: llm.FunctionDef{
-				Name:        t["function"].(map[string]interface{})["name"].(string),
-				Description: t["function"].(map[string]interface{})["description"].(string),
-				Parameters:  t["function"].(map[string]interface{})["parameters"].(map[string]interface{}),
-			},
-		}
-	}
+	toolDefs := a.buildToolDefinitions()
 
 	// Agent 循环
 	for i := 0; i < a.maxLoops; i++ {
